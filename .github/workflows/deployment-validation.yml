@@ -1,0 +1,36 @@
+name: Deployment assets checks
+on:
+  push:
+    paths:
+      - 'deploy/**'
+      - 'services/api/Dockerfile'
+      - 'infra/terraform/bootstrap-api.sh'
+      - '.github/workflows/deploy-api.yml'
+      - '.github/workflows/terraform-api.yml'
+      - '.github/workflows/deployment-validation.yml'
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - 'services/api/Dockerfile'
+      - 'infra/terraform/bootstrap-api.sh'
+jobs:
+  deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment shell scripts
+        run: |
+          bash -n deploy/deploy-api.sh
+          bash -n deploy/backup-db.sh
+          bash -n infra/terraform/bootstrap-api.sh
+      - name: Validate Docker Compose with dummy local environment
+        run: |
+          set -euo pipefail
+          mkdir -p deploy/secrets
+          printf 'POSTGRES_USER=weutube\nPOSTGRES_PASSWORD=not-a-real-password\n' > deploy/secrets/db.env
+          printf 'DATABASE_URL=jdbc:postgresql://postgres:5432/weutube\n' > deploy/secrets/app.env
+          cp services/api/Dockerfile deploy/Dockerfile
+          touch deploy/app.jar
+          printf 'WEUTUBE_API_DOMAIN=api.weutube.com\n' > deploy/.env
+          docker compose -f deploy/docker-compose.yml config --quiet
+          rm -rf deploy/secrets deploy/Dockerfile deploy/app.jar deploy/.env
