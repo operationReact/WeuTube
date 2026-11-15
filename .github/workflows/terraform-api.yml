@@ -12,6 +12,7 @@ on:
       state_bucket:
         description: "Existing private S3 bucket for remote Terraform state"
         required: true
+        default: weutube-prod-tfstate-098859530205
         type: string
       hosted_zone_id:
         description: "Existing Route53 public zone ID (optional when DNS is external)"
@@ -20,6 +21,7 @@ on:
       github_oidc_provider_arn:
         description: "Existing AWS GitHub OIDC provider ARN (needed to create deploy role)"
         required: false
+        default: arn:aws:iam::098859530205:oidc-provider/token.actions.githubusercontent.com
         type: string
 permissions:
   contents: read
@@ -45,7 +47,7 @@ jobs:
             echo "WEUTUBE_TERRAFORM_ROLE_TO_ASSUME must contain the full IAM Role ARN from AWS account 098859530205 (not the OIDC provider ARN)" >&2
             exit 1
           }
-          [[ "$STATE_BUCKET" =~ ^[a-z0-9.-]+$ ]] || exit 1
+          [ "$STATE_BUCKET" = "weutube-prod-tfstate-098859530205" ] || { echo "Use the production state bucket weutube-prod-tfstate-098859530205" >&2; exit 1; }
           [[ -z "$HOSTED_ZONE" || "$HOSTED_ZONE" =~ ^Z[A-Z0-9]+$ ]] || exit 1
           [[ -z "$OIDC_PROVIDER" || "$OIDC_PROVIDER" =~ ^arn:aws:iam::[0-9]{12}:oidc-provider/token.actions.githubusercontent.com$ ]] || exit 1
       - name: Authenticate to AWS using GitHub OIDC
