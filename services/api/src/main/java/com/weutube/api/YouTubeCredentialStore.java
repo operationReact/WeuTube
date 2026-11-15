@@ -9,7 +9,7 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.SecureRandom;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -23,8 +23,11 @@ public class YouTubeCredentialStore {
  private final JdbcTemplate jdbc;
  private final byte[] key;
  private final SecureRandom random=new SecureRandom();
- public YouTubeCredentialStore(JdbcTemplate jdbc,
-   @Value("${weutube.youtube.token-key-base64:}") String encodedKey) {
+ @Autowired
+ public YouTubeCredentialStore(JdbcTemplate jdbc,YouTubeOAuthSettings settings) {
+  this(jdbc,settings.tokenKeyBase64());
+ }
+ public YouTubeCredentialStore(JdbcTemplate jdbc,String encodedKey) {
   this.jdbc=jdbc;
   if (encodedKey.isBlank()) {
    key=null;
