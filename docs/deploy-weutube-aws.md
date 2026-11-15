@@ -20,6 +20,18 @@ Add the IAM role ARN as an **Actions repository secret** called `WEUTUBE_TERRAFO
 
 https://github.com/operationReact/WeuTube/settings/secrets/actions
 
+Before Terraform, run the read-only OIDC verification workflow:
+
+https://github.com/operationReact/WeuTube/actions/workflows/check-aws-oidc.yml
+
+Select `main` and click **Run workflow**. A successful run confirms that GitHub can assume the provided role, but it does not prove the role has Terraform/S3 permissions.
+
+**Important: this repository was created after GitHub introduced immutable default OIDC subjects (July 15, 2026).** The role trust policy should match the new subject value exactly:
+
+`repo:operationReact@215111824/WeuTube@1458924161:ref:refs/heads/main`
+
+The old form `repo:operationReact/WeuTube:ref:refs/heads/main` may cause `Not authorized to perform sts:AssumeRoleWithWebIdentity` for this repository. Confirm the actual subject before changing IAM if the test fails.
+
 Do not use a long-lived IAM access key. The optional `github_oidc_provider_arn` Terraform input should be set to the AWS provider ARN for `token.actions.githubusercontent.com`. The Terraform code can then create a **narrower runtime deployment role** for the main branch.
 
 ## 2. Establish private remote Terraform state
