@@ -1,0 +1,38 @@
+name: WeuTube - verify public DNS and HTTPS
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-weutube-public-dns.yml'
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production DNS points to the deployed Elastic IP
+        run: |
+          set -euo pipefail
+          expected=13.206.36.135
+          failed=0
+          for host in weutube.com www.weutube.com api.weutube.com; do
+            ips="$(dig +short A "$host" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || true)"
+            echo "$host -> ${ips:-NO A RECORD}"
+            if ! grep -Fxq "$expected" <<<"$ips"; then
+              echo "::warning::$host does not currently resolve to $expected"
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::Update Hostinger @, www and api DNS records to 13.206.36.135 before the HTTPS check."
+            exit 1
+          fi
+      - name: Verify real HTTPS API health and website
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --max-time 20 https://api.weutube.com/actuator/health
+          echo ""
+          curl --fail --show-error --silent --max-time 20 --output /dev/null https://weutube.com/
+          curl --fail --show-error --silent --max-time 20 --output /dev/null https://www.weutube.com/
+          echo "All public WeuTube DNS and HTTPS endpoints verified."
