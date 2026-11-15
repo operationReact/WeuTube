@@ -25,7 +25,7 @@ chmod 700 secrets
 
 temp="$(mktemp -d)"
 trap 'rm -rf "$temp"' EXIT
-for file in app.jar Dockerfile docker-compose.yml Caddyfile; do
+for file in app.jar Dockerfile docker-compose.yml Caddyfile backup-db.sh; do
   aws s3 cp --region "$REGION" "s3://$BUCKET/releases/$COMMIT/$file" "$temp/$file" --only-show-errors
 done
 
@@ -73,6 +73,7 @@ install -m 600 "$temp/app.jar" app.jar
 install -m 644 "$temp/Dockerfile" Dockerfile
 install -m 600 "$temp/docker-compose.yml" docker-compose.yml
 install -m 644 "$temp/Caddyfile" Caddyfile
+install -m 700 "$temp/backup-db.sh" backup-db.sh
 
 docker compose config --quiet
 docker compose build --pull api
@@ -92,4 +93,7 @@ if [ "$healthy" != true ]; then
   echo "HTTPS health check failed; check DNS, certificate, and API logs via SSM" >&2
   exit 1
 fi
+# Install an off-instance database backup job after the site passed its health check.
+printf '15 2 * * * root /opt/weutube/backup-db.sh %s >> /var/log/weutube-db-backup.log 2>&1\n' "$BUCKET" > /etc/cron.d/weutube-db-backup
+chmod 644 /etc/cron.d/weutube-db-backup
 echo "WeuTube backend HTTPS health check passed for deployment $COMMIT"
