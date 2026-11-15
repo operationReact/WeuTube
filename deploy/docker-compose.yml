@@ -29,6 +29,13 @@ services:
     networks:
       - private
       - public
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./web-dist:/usr/share/nginx/html:ro
+    networks:
+      - public
   caddy:
     image: caddy:2.9-alpine
     restart: unless-stopped
@@ -37,6 +44,7 @@ services:
       - "443:443"
     environment:
       WEUTUBE_API_DOMAIN: ${WEUTUBE_API_DOMAIN:?Set API hostname}
+      WEUTUBE_WEB_DOMAIN: ${WEUTUBE_WEB_DOMAIN:?Set web hostname}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddydata:/data
