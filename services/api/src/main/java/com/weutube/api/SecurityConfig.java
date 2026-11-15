@@ -12,6 +12,7 @@ public class SecurityConfig {
    .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
    .authorizeHttpRequests(a -> a
      .requestMatchers("/actuator/health","/api/public/**").permitAll()
+     .requestMatchers(HttpMethod.GET,"/api/admin/youtube/callback").permitAll()
      .requestMatchers(HttpMethod.OPTIONS,"/**").permitAll()
      .anyRequest().authenticated())
    .oauth2ResourceServer(o -> o.jwt(j -> {})).build();
