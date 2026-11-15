@@ -113,8 +113,11 @@ rm -rf web-dist
 mv web-dist.next web-dist
 
 docker compose config --quiet
-docker compose build --pull api
-docker compose up -d --remove-orphans --force-recreate
+# Amazon Linux 2023 Docker 25 ships Buildx 0.12; modern Compose needs >=0.17.
+# Build the vetted local API image directly using the Docker classic builder,
+# then explicitly prohibit Compose from rebuilding it with the old plugin.
+DOCKER_BUILDKIT=0 docker build --pull -t weutube-api:local -f Dockerfile .
+docker compose up -d --no-build --remove-orphans --force-recreate
 # Bootstrap mode validates the live Spring Boot process inside the Docker
 # network before DNS is changed; it NEVER claims public HTTPS is ready.
 if [ "$MODE" = "bootstrap" ]; then
