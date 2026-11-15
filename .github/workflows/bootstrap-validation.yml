@@ -32,3 +32,10 @@ jobs:
           assert t['Parameters']['ExistingGithubRoleName']['Default'] == 'weutube-prod-terraform-github'
           print('Bootstrap template scope validated')
           PY
+      - name: Publish validated bootstrap template
+        uses: actions/upload-artifact@v4
+        with:
+          name: weutube-aws-bootstrap-${{ github.run_number }}
+          path: infra/bootstrap/weutube-terraform-bootstrap.json
+          if-no-files-found: error
+          retention-days: 30
