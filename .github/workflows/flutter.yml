@@ -1,0 +1,29 @@
+name: Flutter frontend checks
+on:
+  push:
+    paths:
+      - 'apps/flutter/**'
+      - '.github/workflows/flutter.yml'
+  pull_request:
+    paths:
+      - 'apps/flutter/**'
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+        working-directory: apps/flutter
+      - run: flutter analyze
+        working-directory: apps/flutter
+      - run: flutter test
+        working-directory: apps/flutter
+      - run: flutter create --platforms=android,ios,web .
+        working-directory: apps/flutter
+      - run: flutter build web --release
+        working-directory: apps/flutter
+      - run: flutter build apk --debug
+        working-directory: apps/flutter
