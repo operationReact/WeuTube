@@ -25,7 +25,7 @@ chmod 700 secrets
 
 temp="$(mktemp -d)"
 trap 'rm -rf "$temp"' EXIT
-for file in app.jar Dockerfile docker-compose.yml Caddyfile backup-db.sh; do
+for file in app.jar Dockerfile docker-compose.yml Caddyfile backup-db.sh web-dist.zip; do
   aws s3 cp --region "$REGION" "s3://$BUCKET/releases/$COMMIT/$file" "$temp/$file" --only-show-errors
 done
 
@@ -65,7 +65,9 @@ WEUTUBE_YOUTUBE_SSM_REGION=$REGION
 WEUTUBE_YOUTUBE_REDIRECT_URI=https://$DOMAIN/api/admin/youtube/callback
 EOF
 chmod 600 secrets/app.env
-printf 'WEUTUBE_API_DOMAIN=%s\n' "$DOMAIN" > .env
+WEB_DOMAIN="${DOMAIN#api.}"
+[[ "$DOMAIN" == "api.$WEB_DOMAIN" ]] || { echo "Expected api.<domain> hostname" >&2; exit 2; }
+printf 'WEUTUBE_API_DOMAIN=%s\nWEUTUBE_WEB_DOMAIN=%s\n' "$DOMAIN" "$WEB_DOMAIN" > .env
 chmod 600 .env
 
 # The app itself loads OAuth secrets via AWS SDK; do not put them in app.env.
@@ -74,10 +76,17 @@ install -m 644 "$temp/Dockerfile" Dockerfile
 install -m 600 "$temp/docker-compose.yml" docker-compose.yml
 install -m 644 "$temp/Caddyfile" Caddyfile
 install -m 700 "$temp/backup-db.sh" backup-db.sh
+# Unpack the prebuilt Flutter website; CloudFront is not required.
+rm -rf web-dist.next
+mkdir -p web-dist.next
+python3 -m zipfile -e "$temp/web-dist.zip" web-dist.next
+test -f web-dist.next/index.html
+rm -rf web-dist
+mv web-dist.next web-dist
 
 docker compose config --quiet
 docker compose build --pull api
-docker compose up -d --remove-orphans
+docker compose up -d --remove-orphans --force-recreate
 # Check the HTTPS site, including ACME certificate validation, not just the container exit code.
 healthy=false
 for _ in $(seq 1 36); do
@@ -89,6 +98,11 @@ for _ in $(seq 1 36); do
   fi
   sleep 5
 done
+if [ "$healthy" = true ]; then
+  curl --silent --show-error --fail --max-time 10 \
+    --resolve "$WEB_DOMAIN:443:127.0.0.1" \
+    "https://$WEB_DOMAIN/" > /dev/null || healthy=false
+fi
 if [ "$healthy" != true ]; then
   echo "HTTPS health check failed; check DNS, certificate, and API logs via SSM" >&2
   exit 1
