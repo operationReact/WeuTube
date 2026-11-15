@@ -1,6 +1,12 @@
 locals {
   prefix = "${var.project}-${var.environment}"
 }
+# CloudFront creation is restricted until AWS verifies this new account.
+# The production fallback serves web + API from the existing EC2 HTTPS host.
+variable "enable_cloudfront" {
+  type = bool
+  default = false
+}
 resource "aws_s3_bucket" "web" {
   bucket_prefix = "${local.prefix}-web-"
   tags = {
@@ -29,6 +35,7 @@ resource "aws_cloudfront_origin_access_control" "web" {
   signing_protocol = "sigv4"
 }
 resource "aws_cloudfront_distribution" "web" {
+  count = var.enable_cloudfront ? 1 : 0
   enabled = true
   default_root_object = "index.html"
   origin {
@@ -65,6 +72,7 @@ resource "aws_cloudfront_distribution" "web" {
   }
 }
 data "aws_iam_policy_document" "web" {
+  count = var.enable_cloudfront ? 1 : 0
   statement {
     actions = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.web.arn}/*"]
@@ -75,18 +83,19 @@ data "aws_iam_policy_document" "web" {
     condition {
       test = "StringEquals"
       variable = "AWS:SourceArn"
-      values = [aws_cloudfront_distribution.web.arn]
+      values = [aws_cloudfront_distribution.web[0].arn]
     }
   }
 }
 resource "aws_s3_bucket_policy" "web" {
+  count = var.enable_cloudfront ? 1 : 0
   bucket = aws_s3_bucket.web.id
-  policy = data.aws_iam_policy_document.web.json
+  policy = data.aws_iam_policy_document.web[0].json
   depends_on = [aws_s3_bucket_public_access_block.web]
 }
 output "web_bucket" {
   value = aws_s3_bucket.web.id
 }
 output "cloudfront_domain" {
-  value = aws_cloudfront_distribution.web.domain_name
+  value = var.enable_cloudfront ? aws_cloudfront_distribution.web[0].domain_name : null
 }
