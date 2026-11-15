@@ -91,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
           base="s3://$ARTIFACT_BUCKET/releases/$GITHUB_SHA"
-          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' '$API_DOMAIN' '$COGNITO_ISSUER_URI'"
+          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --region ap-south-1 --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' '$API_DOMAIN' '$COGNITO_ISSUER_URI'"
           parameters="$(jq -nc --arg cmd "$cmd" '{commands:[$cmd],executionTimeout:["1800"]}')"
           command_id="$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
