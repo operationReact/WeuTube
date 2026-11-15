@@ -1,0 +1,33 @@
+name: WeuTube - Verify AWS OIDC access
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm role ARN secret is configured
+        env:
+          ROLE_ARN: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+        run: |
+          if [ -z "$ROLE_ARN" ]; then
+            echo "::error::Missing repository secret WEUTUBE_TERRAFORM_ROLE_TO_ASSUME"
+            exit 1
+          fi
+          if [[ ! "$ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]; then
+            echo "::error::The configured value must be an AWS IAM role ARN"
+            exit 1
+          fi
+      - name: Assume Terraform role through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+          role-session-name: weutube-oidc-validation
+      - name: Verify caller identity without modifying AWS resources
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity --query '{Account:Account,Arn:Arn}' --output json
+          echo "AWS OIDC federation verified. No AWS resources were created or changed."
