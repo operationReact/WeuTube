@@ -12,6 +12,21 @@ This repository contains deployment tooling, but **no AWS resources have been cr
 - The first-stack bootstrap workflow uploads the tested Java/Flutter release to private S3, starts Docker Compose via SSM, and verifies the API within Docker before public DNS is changed. A successful internal-health check is **not** a public HTTPS pass.
 - After DNS resolves, run the standard API deployment workflow with `WEUTUBE_AWS_ROLE_TO_ASSUME` set to Terraform output `github_api_deploy_role_arn`. Then validate both HTTPS domains and add the exact Google OAuth callback URI `https://api.weutube.com/api/admin/youtube/callback` to the existing Google OAuth client.
 
+## Verified runtime deployment (16 Nov 2026 IST)
+
+- Existing AWS account: `098859530205`, region `ap-south-1`
+- EC2 instance: `i-098ed59f1b1b66446`
+- Elastic IP: `13.206.36.135`
+- Cognito user pool: `ap-south-1_6Q3vbb8Eq`
+- Backend artifact bucket: `weutube-prod-api-artifacts-20261115191558766100000003`
+- API deploy OIDC role: `arn:aws:iam::098859530205:role/weutube-prod-github-api-deploy`
+- GitHub SSM deployment run #43753127577: **SUCCESS**. Docker, PostgreSQL, Spring Boot and the Flutter site containers were started; backend `/actuator/health` passed **from within the Docker network**.
+- GitHub public DNS test run #43753505198: **FAILED** because `weutube.com` and `www.weutube.com` still resolve to `2.57.91.91`, and `api.weutube.com` has no A record.
+- Required Hostinger A records: `@ → 13.206.36.135`, `www → 13.206.36.135`, `api → 13.206.36.135`. If `www` remains a CNAME to `weutube.com`, that is also acceptable once the root A record is correct.
+- After Hostinger DNS is corrected and propagated, run `verify-weutube-public-dns.yml`. Once HTTPS passes, run `deploy-api.yml` from the `main` branch; this reads the exact instance, artifact bucket, Cognito issuer and deploy role from Terraform state automatically.
+- Google Cloud existing Web OAuth client must then have redirect URI `https://api.weutube.com/api/admin/youtube/callback`. A real Cognito admin user with `weutube-admin` group membership is required. Live Google consent and upload/publishing are **not** yet verified.
+- CloudFront is intentionally **disabled** because the AWS account rejected CloudFront distribution creation with a verification-required error. Web traffic goes to Caddy on EC2 instead.
+
 ## Credentials already supplied by the project owner
 
 All three names below are expected to exist in Systems Manager Parameter Store in `ap-south-1`:
