@@ -2,6 +2,16 @@
 
 This repository contains deployment tooling, but **no AWS resources have been created by these commits**. All resources incur charges when an operator explicitly runs the Terraform apply workflow. Always review the Terraform plan and expected recurring costs first.
 
+## Production status after first infrastructure attempt
+
+- AWS preflight passed: GitHub OIDC, state bucket and all three SSM secrets can be accessed by the Terraform role.
+- First Terraform apply provisioned EC2, Elastic IP, S3, Cognito, IAM and networking, but CloudFront returned **403 Account verification required**.
+- CloudFront is now disabled by default (`enable_cloudfront=false`); a subsequent Terraform plan found **no changes**. The app is instead configured to serve `weutube.com`, `www.weutube.com` and `api.weutube.com` from the same EC2 Caddy HTTPS service.
+- Flutter website remains a *demo*. The backend OAuth connector is built but public connectivity and a verified admin login require additional testing.
+- In Hostinger DNS, the `@`, `www`, and `api` A records need to point to the Terraform output `api_eip`. Remove only conflicting existing records for those three names. Avoid changing MX or other unrelated DNS entries.
+- The first-stack bootstrap workflow uploads the tested Java/Flutter release to private S3, starts Docker Compose via SSM, and verifies the API within Docker before public DNS is changed. A successful internal-health check is **not** a public HTTPS pass.
+- After DNS resolves, run the standard API deployment workflow with `WEUTUBE_AWS_ROLE_TO_ASSUME` set to Terraform output `github_api_deploy_role_arn`. Then validate both HTTPS domains and add the exact Google OAuth callback URI `https://api.weutube.com/api/admin/youtube/callback` to the existing Google OAuth client.
+
 ## Credentials already supplied by the project owner
 
 All three names below are expected to exist in Systems Manager Parameter Store in `ap-south-1`:
