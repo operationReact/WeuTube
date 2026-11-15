@@ -1,0 +1,126 @@
+name: WeuTube - first EC2 app stack bootstrap (pre-DNS)
+# Runs once when first committed to main. Requires the already-created Terraform
+# deployment role, instance, private artifact bucket, and Cognito resources.
+# Does not claim public HTTPS is ready before Hostinger DNS is updated.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/weutube-first-stack-start.yml'
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: weutube-api-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to production Terraform role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.0'
+      - name: Read created infrastructure outputs
+        working-directory: infra/terraform
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "098859530205"
+          terraform init -input=false \
+            -backend-config="bucket=weutube-prod-tfstate-098859530205" \
+            -backend-config="key=weutube/prod/terraform.tfstate" \
+            -backend-config="region=ap-south-1" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          echo "INSTANCE_ID=$(terraform output -raw api_instance_id)" >> "$GITHUB_ENV"
+          echo "API_EIP=$(terraform output -raw api_eip)" >> "$GITHUB_ENV"
+          echo "ARTIFACT_BUCKET=$(terraform output -raw api_artifacts_bucket)" >> "$GITHUB_ENV"
+          echo "COGNITO_ISSUER=$(terraform output -raw cognito_issuer_uri)" >> "$GITHUB_ENV"
+          echo "DEPLOY_ROLE=$(terraform output -raw github_api_deploy_role_arn)" >> "$GITHUB_ENV"
+      - name: Build verified Java 21 Spring Boot API
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/api/pom.xml
+      - name: Run backend tests and package
+        working-directory: services/api
+        run: mvn -B clean verify
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Build Flutter web preview
+        working-directory: apps/flutter
+        run: |
+          flutter create --platforms=web --org com.weutube .
+          rm -f test/widget_test.dart analysis_options.yaml
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test test/app_test.dart
+          flutter build web --release
+      - name: Bundle immutable API and Flutter release
+        run: |
+          set -euo pipefail
+          (cd apps/flutter/build/web && zip -q -r "$GITHUB_WORKSPACE/web-dist.zip" .)
+          base="s3://$ARTIFACT_BUCKET/releases/$GITHUB_SHA"
+          aws s3 cp services/api/target/api-0.1.0.jar "$base/app.jar" --only-show-errors
+          aws s3 cp services/api/Dockerfile "$base/Dockerfile" --only-show-errors
+          aws s3 cp deploy/docker-compose.yml "$base/docker-compose.yml" --only-show-errors
+          aws s3 cp deploy/Caddyfile "$base/Caddyfile" --only-show-errors
+          aws s3 cp deploy/backup-db.sh "$base/backup-db.sh" --only-show-errors
+          aws s3 cp deploy/deploy-api.sh "$base/deploy-api.sh" --only-show-errors
+          aws s3 cp web-dist.zip "$base/web-dist.zip" --only-show-errors
+      - name: Assume production API deploy role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE }}
+          aws-region: ap-south-1
+          role-session-name: weutube-bootstrap-stack
+          unset-current-credentials: true
+      - name: Bootstrap containers with INTERNAL health checks (no external DNS yet)
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "098859530205"
+          base="s3://$ARTIFACT_BUCKET/releases/$GITHUB_SHA"
+          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --region ap-south-1 --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' api.weutube.com '$COGNITO_ISSUER' bootstrap"
+          parameters="$(jq -nc --arg cmd "$cmd" '{commands:[$cmd],executionTimeout:["1800"]}')"
+          command_id="$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "WeuTube EC2 API bootstrap $GITHUB_SHA" \
+            --parameters "$parameters" \
+            --query Command.CommandId --output text)"
+          echo "SSM command: $command_id"
+          for attempt in $(seq 1 180); do
+            status="$(aws ssm get-command-invocation --command-id "$command_id" \
+              --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)"
+            case "$status" in
+              Success)
+                echo "Private Docker application health check succeeded; DNS and HTTPS remain to verify."
+                break ;;
+              Failed|TimedOut|Cancelled|Cancelling)
+                echo "::error::SSM bootstrap failed: $status"
+                aws ssm get-command-invocation --command-id "$command_id" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query '[StandardOutputContent,StandardErrorContent]' --output text
+                exit 1 ;;
+              *) sleep 10 ;;
+            esac
+            if [ "$attempt" -eq 180 ]; then echo "::error::SSM bootstrap timed out"; exit 1; fi
+          done
+      - name: Publish Hostinger DNS action and next stage
+        run: |
+          {
+            echo "## WeuTube infrastructure and server bootstrap"
+            echo "Instance ID: $INSTANCE_ID"
+            echo "Elastic IP: $API_EIP"
+            echo "The app containers passed an internal health check; public HTTPS is not yet verified."
+            echo "Hostinger DNS A records needed: @, www, api → $API_EIP"
+            echo "After DNS resolves, run the standard API deployment workflow with exact GitHub Actions deploy role and Google redirect URI."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
