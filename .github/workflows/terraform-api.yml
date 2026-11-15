@@ -41,6 +41,10 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$ROLE" || { echo "WEUTUBE_TERRAFORM_ROLE_TO_ASSUME secret is required" >&2; exit 1; }
+          [[ "$ROLE" =~ ^arn:aws:iam::098859530205:role/.+ ]] || {
+            echo "WEUTUBE_TERRAFORM_ROLE_TO_ASSUME must contain the full IAM Role ARN from AWS account 098859530205 (not the OIDC provider ARN)" >&2
+            exit 1
+          }
           [[ "$STATE_BUCKET" =~ ^[a-z0-9.-]+$ ]] || exit 1
           [[ -z "$HOSTED_ZONE" || "$HOSTED_ZONE" =~ ^Z[A-Z0-9]+$ ]] || exit 1
           [[ -z "$OIDC_PROVIDER" || "$OIDC_PROVIDER" =~ ^arn:aws:iam::[0-9]{12}:oidc-provider/token.actions.githubusercontent.com$ ]] || exit 1
@@ -49,6 +53,13 @@ jobs:
         with:
           role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
           aws-region: ap-south-1
+      - name: Guard production AWS account
+        run: |
+          account="$(aws sts get-caller-identity --query Account --output text)"
+          if [ "$account" != "098859530205" ]; then
+            echo "::error::Refusing Terraform deployment outside AWS account 098859530205"
+            exit 1
+          fi
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.14.0'
