@@ -23,3 +23,14 @@ management:
     web:
       exposure:
         include: health,info
+
+# Inject these environment variables at runtime from AWS SSM Parameter Store.
+# /weutube/prod/youtube/client-id -> WEUTUBE_YOUTUBE_CLIENT_ID
+# /weutube/prod/youtube/client-secret -> WEUTUBE_YOUTUBE_CLIENT_SECRET
+# Never place OAuth credentials in source control.
+weutube:
+  youtube:
+    client-id: ${WEUTUBE_YOUTUBE_CLIENT_ID:}
+    client-secret: ${WEUTUBE_YOUTUBE_CLIENT_SECRET:}
+    redirect-uri: ${WEUTUBE_YOUTUBE_REDIRECT_URI:}
+    token-key-base64: ${WEUTUBE_YOUTUBE_TOKEN_KEY_BASE64:}
