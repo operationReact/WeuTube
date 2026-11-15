@@ -1,0 +1,25 @@
+server:
+  port: ${PORT:8080}
+spring:
+  application:
+    name: weutube-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/weutube}
+    username: ${DATABASE_USERNAME:weutube}
+    password: ${DATABASE_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${COGNITO_ISSUER_URI:http://localhost:9999/not-configured}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
