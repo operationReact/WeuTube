@@ -111,6 +111,10 @@ python3 -m zipfile -e "$temp/web-dist.zip" web-dist.next
 test -f web-dist.next/index.html
 rm -rf web-dist
 mv web-dist.next web-dist
+# Static web files are public assets: nginx worker must be able to traverse
+# directories and read assets, even though deploy runs with umask 077.
+find web-dist -type d -exec chmod 755 {} +
+find web-dist -type f -exec chmod 644 {} +
 
 docker compose config --quiet
 # Amazon Linux 2023 Docker 25 ships Buildx 0.12; modern Compose needs >=0.17.
