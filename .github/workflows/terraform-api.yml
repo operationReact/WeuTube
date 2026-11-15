@@ -1,0 +1,90 @@
+name: WeuTube infrastructure - plan or apply (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Plan only (no resources) or apply production infrastructure"
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+      state_bucket:
+        description: "Existing private S3 bucket for remote Terraform state"
+        required: true
+        type: string
+      hosted_zone_id:
+        description: "Existing Route53 public zone ID (optional when DNS is external)"
+        required: false
+        type: string
+      github_oidc_provider_arn:
+        description: "Existing AWS GitHub OIDC provider ARN (needed to create deploy role)"
+        required: false
+        type: string
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  infrastructure:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: weutube-terraform-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate infrastructure inputs
+        env:
+          ROLE: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          STATE_BUCKET: ${{ inputs.state_bucket }}
+          HOSTED_ZONE: ${{ inputs.hosted_zone_id }}
+          OIDC_PROVIDER: ${{ inputs.github_oidc_provider_arn }}
+        run: |
+          set -euo pipefail
+          test -n "$ROLE" || { echo "WEUTUBE_TERRAFORM_ROLE_TO_ASSUME secret is required" >&2; exit 1; }
+          [[ "$STATE_BUCKET" =~ ^[a-z0-9.-]+$ ]] || exit 1
+          [[ -z "$HOSTED_ZONE" || "$HOSTED_ZONE" =~ ^Z[A-Z0-9]+$ ]] || exit 1
+          [[ -z "$OIDC_PROVIDER" || "$OIDC_PROVIDER" =~ ^arn:aws:iam::[0-9]{12}:oidc-provider/token.actions.githubusercontent.com$ ]] || exit 1
+      - name: Authenticate to AWS using GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.0'
+      - name: Initialize encrypted and locked S3 remote state
+        working-directory: infra/terraform
+        env:
+          STATE_BUCKET: ${{ inputs.state_bucket }}
+        run: |
+          terraform fmt -recursive
+          terraform init -input=false \
+            -backend-config="bucket=$STATE_BUCKET" \
+            -backend-config="key=weutube/prod/terraform.tfstate" \
+            -backend-config="region=ap-south-1" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          terraform validate
+      - name: Generate production plan
+        working-directory: infra/terraform
+        env:
+          HOSTED_ZONE: ${{ inputs.hosted_zone_id }}
+          OIDC_PROVIDER: ${{ inputs.github_oidc_provider_arn }}
+        run: |
+          terraform plan -input=false -out=prod.tfplan \
+            -var="enable_api=true" \
+            -var="api_hosted_zone_id=$HOSTED_ZONE" \
+            -var="github_oidc_provider_arn=$OIDC_PROVIDER"
+      - name: Apply exact reviewed Terraform plan
+        if: inputs.operation == 'apply'
+        working-directory: infra/terraform
+        run: terraform apply -input=false -auto-approve prod.tfplan
+      - name: Show nonsecret connection outputs
+        if: inputs.operation == 'apply'
+        working-directory: infra/terraform
+        run: |
+          terraform output api_instance_id
+          terraform output api_eip
+          terraform output api_artifacts_bucket
+          terraform output cognito_issuer_uri
+          terraform output github_api_deploy_role_arn
