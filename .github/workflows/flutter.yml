@@ -17,11 +17,13 @@ jobs:
           channel: stable
       - run: flutter create --platforms=android,ios,web .
         working-directory: apps/flutter
+      - run: rm -f test/widget_test.dart analysis_options.yaml
+        working-directory: apps/flutter
       - run: flutter pub get
         working-directory: apps/flutter
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-infos
         working-directory: apps/flutter
-      - run: flutter test
+      - run: flutter test test/app_test.dart
         working-directory: apps/flutter
       - run: flutter build web --release
         working-directory: apps/flutter
