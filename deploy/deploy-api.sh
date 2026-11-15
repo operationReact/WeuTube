@@ -21,6 +21,24 @@ REGION="ap-south-1"
 [[ "$ISSUER" =~ ^https://cognito-idp\.ap-south-1\.amazonaws\.com/ap-south-1_[A-Za-z0-9]+$ ]] || {
   echo "Invalid Cognito issuer" >&2; exit 2;
 }
+# Recover from interrupted EC2 cloud-init without SSH/CloudShell.
+# On Amazon Linux 2023 the Docker package may not be present initially.
+if ! command -v docker >/dev/null 2>&1; then
+  dnf install -y docker
+fi
+systemctl enable --now docker
+if ! docker compose version >/dev/null 2>&1; then
+  mkdir -p /usr/local/lib/docker/cli-plugins
+  curl --fail --location --retry 3 --silent --show-error \
+    https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64 \
+    --output /usr/local/lib/docker/cli-plugins/docker-compose
+  chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+fi
+docker compose version
+if ! command -v crontab >/dev/null 2>&1; then
+  dnf install -y cronie
+fi
+systemctl enable --now crond
 cd /opt/weutube
 mkdir -p secrets
 chmod 700 secrets
