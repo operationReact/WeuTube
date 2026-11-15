@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -24,13 +23,10 @@ public class GoogleYouTubeClient {
  private final String clientSecret;
  private final String redirectUri;
 
- public GoogleYouTubeClient(
-   @Value("${weutube.youtube.client-id:}") String clientId,
-   @Value("${weutube.youtube.client-secret:}") String clientSecret,
-   @Value("${weutube.youtube.redirect-uri:}") String redirectUri) {
-  this.clientId=clientId;
-  this.clientSecret=clientSecret;
-  this.redirectUri=redirectUri;
+ public GoogleYouTubeClient(YouTubeOAuthSettings settings) {
+  this.clientId=settings.clientId();
+  this.clientSecret=settings.clientSecret();
+  this.redirectUri=settings.redirectUri();
   SimpleClientHttpRequestFactory factory=new SimpleClientHttpRequestFactory();
   factory.setConnectTimeout(Duration.ofSeconds(5));
   factory.setReadTimeout(Duration.ofSeconds(10));
