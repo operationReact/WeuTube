@@ -1,79 +1,65 @@
-name: WeuTube API - manual production deployment
+name: WeuTube API and Flutter web - production HTTPS deployment
+# One-click release after Hostinger DNS points @, www, and api at the Terraform EIP.
+# Derives all non-secret values from locked Terraform state. No additional repo
+# secret beyond the existing WEUTUBE_TERRAFORM_ROLE_TO_ASSUME is necessary.
 on:
   workflow_dispatch:
-    inputs:
-      instance_id:
-        description: "Terraform output api_instance_id (i-...)"
-        required: true
-        type: string
-      artifact_bucket:
-        description: "Terraform output api_artifacts_bucket"
-        required: true
-        type: string
-      cognito_issuer_uri:
-        description: "Terraform output cognito_issuer_uri"
-        required: true
-        type: string
-      api_domain:
-        description: "HTTPS API host (DNS must already point to the instance)"
-        required: true
-        default: api.weutube.com
-        type: string
 permissions:
   contents: read
   id-token: write
 jobs:
   deploy:
-    name: Build and deploy API via SSM
     runs-on: ubuntu-latest
     concurrency:
       group: weutube-api-production
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-      - name: Validate required deployment settings
-        env:
-          AWS_ROLE_ARN: ${{ secrets.WEUTUBE_AWS_ROLE_TO_ASSUME }}
-          INSTANCE_ID: ${{ inputs.instance_id }}
-          ARTIFACT_BUCKET: ${{ inputs.artifact_bucket }}
-          COGNITO_ISSUER_URI: ${{ inputs.cognito_issuer_uri }}
-          API_DOMAIN: ${{ inputs.api_domain }}
-        run: |
-          set -euo pipefail
-          test -n "$AWS_ROLE_ARN" || { echo "Configure WEUTUBE_AWS_ROLE_TO_ASSUME repository secret" >&2; exit 1; }
-          [[ "$INSTANCE_ID" =~ ^i-[0-9a-f]{17}$ ]] || exit 1
-          [[ "$ARTIFACT_BUCKET" =~ ^[a-z0-9.-]+$ ]] || exit 1
-          [[ "$COGNITO_ISSUER_URI" =~ ^https://cognito-idp\.ap-south-1\.amazonaws\.com/ap-south-1_[A-Za-z0-9]+$ ]] || exit 1
-          [[ "$API_DOMAIN" =~ ^[a-z0-9.-]+$ ]] || exit 1
-      - name: Assume AWS deploy role (OIDC, no static credentials)
+      - name: Authenticate existing production Terraform role
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.WEUTUBE_AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
           aws-region: ap-south-1
-      - name: Verify all three OAuth SSM parameters exist and decrypt
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.0'
+      - name: Read infrastructure outputs securely
+        working-directory: infra/terraform
         run: |
           set -euo pipefail
-          for name in \
-            /weutube/prod/youtube/client-id \
-            /weutube/prod/youtube/client-secret \
-            /weutube/prod/youtube/token-key-base64; do
-            aws ssm get-parameter --name "$name" --with-decryption \
-              --query Parameter.Name --output text > /dev/null
+          test "$(aws sts get-caller-identity --query Account --output text)" = "098859530205"
+          terraform init -input=false \
+            -backend-config="bucket=weutube-prod-tfstate-098859530205" \
+            -backend-config="key=weutube/prod/terraform.tfstate" \
+            -backend-config="region=ap-south-1" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          echo "INSTANCE_ID=$(terraform output -raw api_instance_id)" >> "$GITHUB_ENV"
+          echo "API_EIP=$(terraform output -raw api_eip)" >> "$GITHUB_ENV"
+          echo "ARTIFACT_BUCKET=$(terraform output -raw api_artifacts_bucket)" >> "$GITHUB_ENV"
+          echo "COGNITO_ISSUER=$(terraform output -raw cognito_issuer_uri)" >> "$GITHUB_ENV"
+          echo "DEPLOY_ROLE=$(terraform output -raw github_api_deploy_role_arn)" >> "$GITHUB_ENV"
+      - name: Verify required encrypted SSM parameters without exposing values
+        run: |
+          set -euo pipefail
+          for suffix in client-id client-secret token-key-base64; do
+            aws ssm get-parameter \
+              --name "/weutube/prod/youtube/$suffix" --region ap-south-1 \
+              --with-decryption --query Parameter.Name --output text >/dev/null
           done
-          echo "All three SSM parameters are accessible (values deliberately hidden)"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
           cache-dependency-path: services/api/pom.xml
-      - name: Verify and package API
+      - name: Test and package Spring Boot API
         working-directory: services/api
         run: mvn -B clean verify
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Build Flutter website for the EC2 HTTPS host
+      - name: Test and build Flutter website
         working-directory: apps/flutter
         run: |
           flutter create --platforms=web --org com.weutube .
@@ -82,14 +68,10 @@ jobs:
           flutter analyze --no-fatal-infos
           flutter test test/app_test.dart
           flutter build web --release
-      - name: Package website for EC2
-        run: |
-          (cd apps/flutter/build/web && zip -q -r "$GITHUB_WORKSPACE/web-dist.zip" .)
-      - name: Upload immutable deployment release
-        env:
-          ARTIFACT_BUCKET: ${{ inputs.artifact_bucket }}
+      - name: Upload immutable production release
         run: |
           set -euo pipefail
+          (cd apps/flutter/build/web && zip -q -r "$GITHUB_WORKSPACE/web-dist.zip" .)
           base="s3://$ARTIFACT_BUCKET/releases/$GITHUB_SHA"
           aws s3 cp services/api/target/api-0.1.0.jar "$base/app.jar" --only-show-errors
           aws s3 cp services/api/Dockerfile "$base/Dockerfile" --only-show-errors
@@ -98,39 +80,53 @@ jobs:
           aws s3 cp deploy/deploy-api.sh "$base/deploy-api.sh" --only-show-errors
           aws s3 cp deploy/backup-db.sh "$base/backup-db.sh" --only-show-errors
           aws s3 cp web-dist.zip "$base/web-dist.zip" --only-show-errors
-      - name: Deploy remotely and verify command
-        env:
-          INSTANCE_ID: ${{ inputs.instance_id }}
-          ARTIFACT_BUCKET: ${{ inputs.artifact_bucket }}
-          COGNITO_ISSUER_URI: ${{ inputs.cognito_issuer_uri }}
-          API_DOMAIN: ${{ inputs.api_domain }}
+      - name: Assume narrow GitHub deployment role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE }}
+          aws-region: ap-south-1
+          role-session-name: weutube-production-https-deploy
+          unset-current-credentials: true
+      - name: Deploy through SSM and verify HTTPS end-to-end
         run: |
           set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "098859530205"
           base="s3://$ARTIFACT_BUCKET/releases/$GITHUB_SHA"
-          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --region ap-south-1 --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' '$API_DOMAIN' '$COGNITO_ISSUER_URI'"
-          parameters="$(jq -nc --arg cmd "$cmd" '{commands:[$cmd],executionTimeout:["1800"]}')"
+          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --region ap-south-1 --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' api.weutube.com '$COGNITO_ISSUER' verify"
+          params="$(jq -nc --arg cmd "$cmd" '{commands:[$cmd],executionTimeout:["1800"]}')"
           command_id="$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name AWS-RunShellScript \
-            --comment "Deploy WeuTube API $GITHUB_SHA" \
-            --parameters "$parameters" \
+            --comment "WeuTube production HTTPS deploy $GITHUB_SHA" \
+            --parameters "$params" \
             --query Command.CommandId --output text)"
-          echo "SSM deployment command: $command_id"
+          echo "SSM command ID: $command_id"
           for attempt in $(seq 1 180); do
             status="$(aws ssm get-command-invocation --command-id "$command_id" \
               --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)"
             case "$status" in
               Success)
-                echo "Remote deployment and HTTPS health check succeeded"
-                exit 0 ;;
+                echo "Production HTTPS health check passed inside EC2"
+                break ;;
               Failed|TimedOut|Cancelled|Cancelling)
-                echo "Deployment failed: $status" >&2
+                echo "::error::Production HTTPS deploy failed: $status"
                 aws ssm get-command-invocation --command-id "$command_id" \
-                  --instance-id "$INSTANCE_ID" --query '[StandardOutputContent,StandardErrorContent]' \
-                  --output text
+                  --instance-id "$INSTANCE_ID" \
+                  --query '[StandardOutputContent,StandardErrorContent]' --output text
                 exit 1 ;;
               *) sleep 10 ;;
             esac
+            if [ "$attempt" -eq 180 ]; then echo "::error::SSM deploy timed out"; exit 1; fi
           done
-          echo "Deployment verification timed out; see AWS Systems Manager Run Command" >&2
-          exit 1
+          curl --fail --silent --show-error --max-time 15 https://api.weutube.com/actuator/health
+          curl --fail --silent --show-error --max-time 15 -o /dev/null https://weutube.com/
+      - name: Publish verified deployment details
+        run: |
+          {
+            echo "## WeuTube production HTTPS verified"
+            echo "Backend: https://api.weutube.com/actuator/health"
+            echo "Website: https://weutube.com/"
+            echo "Elastic IP: $API_EIP"
+            echo "Google OAuth redirect: https://api.weutube.com/api/admin/youtube/callback"
+            echo "Note: Flutter account login, uploads and earnings still use prototype UI and must not be presented as live."
+          } >> "$GITHUB_STEP_SUMMARY"
