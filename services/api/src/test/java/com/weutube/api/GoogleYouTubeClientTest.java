@@ -37,6 +37,12 @@ class GoogleYouTubeClientTest {
   assertEquals("UC123",channel.id());
   assertEquals("Creator's Channel",channel.title());
  }
+ @Test void validatesRefreshedAccessToken() throws Exception {
+  var refreshed=mapper.readTree("{\"access_token\":\"short-lived-access\",\"expires_in\":3599}");
+  assertEquals("short-lived-access",GoogleYouTubeClient.parseRefreshedAccessToken(refreshed));
+  assertThrows(GoogleYouTubeClient.ProviderException.class,
+   ()->GoogleYouTubeClient.parseRefreshedAccessToken(mapper.readTree("{}")));
+ }
  @Test void refusesUnownedOrAmbiguousChannelResponse() throws Exception {
   assertThrows(GoogleYouTubeClient.ProviderException.class,
    ()->GoogleYouTubeClient.parseChannel(mapper.readTree("{\"items\":[]}")));
