@@ -26,15 +26,16 @@ import org.springframework.web.server.ResponseStatusException;
 public class YouTubeOAuthController {
  private static final SecureRandom RANDOM = new SecureRandom();
  private final JdbcTemplate jdbc;
+ private final YouTubeCredentialStore credentials;
  private final String clientId;
  private final String redirectUri;
  private final String adminGroup;
 
- public YouTubeOAuthController(JdbcTemplate jdbc,
+ public YouTubeOAuthController(JdbcTemplate jdbc,YouTubeCredentialStore credentials,
    @Value("${weutube.youtube.client-id:}") String clientId,
    @Value("${weutube.youtube.redirect-uri:}") String redirectUri,
    @Value("${weutube.security.admin-group:weutube-admin}") String adminGroup) {
-  this.jdbc=jdbc; this.clientId=clientId; this.redirectUri=redirectUri; this.adminGroup=adminGroup;
+  this.jdbc=jdbc; this.credentials=credentials; this.clientId=clientId; this.redirectUri=redirectUri; this.adminGroup=adminGroup;
  }
  private void requireAdmin(Jwt jwt) {
   Object raw=jwt.getClaims().get("cognito:groups");
@@ -45,6 +46,11 @@ public class YouTubeOAuthController {
   return URLEncoder.encode(value,StandardCharsets.UTF_8);
  }
  public record AuthorizationUrl(String url,Instant expiresAt) {}
+ @GetMapping("/channels")
+ public java.util.List<YouTubeCredentialStore.ChannelSummary> channels(@AuthenticationPrincipal Jwt jwt) {
+  requireAdmin(jwt);
+  return credentials.connectedChannels();
+ }
  @PostMapping("/authorization")
  @Transactional
  public AuthorizationUrl start(@AuthenticationPrincipal Jwt jwt) {
