@@ -16,7 +16,7 @@ jobs:
       group: weutube-api-production
       cancel-in-progress: false
     env:
-      SOURCE_RELEASE_SHA: 9de5149285032831cfbd84b766a71fc16ed7e83e
+      SOURCE_RELEASE_SHA: 3f35da2b581a3bbac3b98aacc2acd798b1c7ed80
     steps:
       - uses: actions/checkout@v4
       - name: Authenticate as production Terraform role
