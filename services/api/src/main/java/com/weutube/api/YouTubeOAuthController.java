@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -30,11 +31,14 @@ public class YouTubeOAuthController {
  private final String redirectUri;
  private final String adminGroup;
 
+ @Autowired
  public YouTubeOAuthController(JdbcTemplate jdbc,YouTubeCredentialStore credentials,
-   YouTubeConnectionService connection,
-   @Value("${weutube.youtube.client-id:}") String clientId,
-   @Value("${weutube.youtube.redirect-uri:}") String redirectUri,
+   YouTubeConnectionService connection,YouTubeOAuthSettings settings,
    @Value("${weutube.security.admin-group:weutube-admin}") String adminGroup) {
+  this(jdbc,credentials,connection,settings.clientId(),settings.redirectUri(),adminGroup);
+ }
+ YouTubeOAuthController(JdbcTemplate jdbc,YouTubeCredentialStore credentials,
+   YouTubeConnectionService connection,String clientId,String redirectUri,String adminGroup) {
   this.jdbc=jdbc; this.credentials=credentials; this.connection=connection;
   this.clientId=clientId; this.redirectUri=redirectUri; this.adminGroup=adminGroup;
  }
