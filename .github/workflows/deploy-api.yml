@@ -1,0 +1,119 @@
+name: WeuTube API - manual production deployment
+on:
+  workflow_dispatch:
+    inputs:
+      instance_id:
+        description: "Terraform output api_instance_id (i-...)"
+        required: true
+        type: string
+      artifact_bucket:
+        description: "Terraform output api_artifacts_bucket"
+        required: true
+        type: string
+      cognito_issuer_uri:
+        description: "Terraform output cognito_issuer_uri"
+        required: true
+        type: string
+      api_domain:
+        description: "HTTPS API host (DNS must already point to the instance)"
+        required: true
+        default: api.weutube.com
+        type: string
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  deploy:
+    name: Build and deploy API via SSM
+    runs-on: ubuntu-latest
+    concurrency:
+      group: weutube-api-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate required deployment settings
+        env:
+          AWS_ROLE_ARN: ${{ secrets.WEUTUBE_AWS_ROLE_TO_ASSUME }}
+          INSTANCE_ID: ${{ inputs.instance_id }}
+          ARTIFACT_BUCKET: ${{ inputs.artifact_bucket }}
+          COGNITO_ISSUER_URI: ${{ inputs.cognito_issuer_uri }}
+          API_DOMAIN: ${{ inputs.api_domain }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ROLE_ARN" || { echo "Configure WEUTUBE_AWS_ROLE_TO_ASSUME repository secret" >&2; exit 1; }
+          [[ "$INSTANCE_ID" =~ ^i-[0-9a-f]{17}$ ]] || exit 1
+          [[ "$ARTIFACT_BUCKET" =~ ^[a-z0-9.-]+$ ]] || exit 1
+          [[ "$COGNITO_ISSUER_URI" =~ ^https://cognito-idp\.ap-south-1\.amazonaws\.com/ap-south-1_[A-Za-z0-9]+$ ]] || exit 1
+          [[ "$API_DOMAIN" =~ ^[a-z0-9.-]+$ ]] || exit 1
+      - name: Assume AWS deploy role (OIDC, no static credentials)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_AWS_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+      - name: Verify all three OAuth SSM parameters exist and decrypt
+        run: |
+          set -euo pipefail
+          for name in \
+            /weutube/prod/youtube/client-id \
+            /weutube/prod/youtube/client-secret \
+            /weutube/prod/youtube/token-key-base64; do
+            aws ssm get-parameter --name "$name" --with-decryption \
+              --query Parameter.Name --output text > /dev/null
+          done
+          echo "All three SSM parameters are accessible (values deliberately hidden)"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/api/pom.xml
+      - name: Verify and package API
+        working-directory: services/api
+        run: mvn -B clean verify
+      - name: Upload immutable deployment release
+        env:
+          ARTIFACT_BUCKET: ${{ inputs.artifact_bucket }}
+        run: |
+          set -euo pipefail
+          base="s3://$ARTIFACT_BUCKET/releases/$GITHUB_SHA"
+          aws s3 cp services/api/target/api-0.1.0.jar "$base/app.jar" --only-show-errors
+          aws s3 cp services/api/Dockerfile "$base/Dockerfile" --only-show-errors
+          aws s3 cp deploy/docker-compose.yml "$base/docker-compose.yml" --only-show-errors
+          aws s3 cp deploy/Caddyfile "$base/Caddyfile" --only-show-errors
+          aws s3 cp deploy/deploy-api.sh "$base/deploy-api.sh" --only-show-errors
+      - name: Deploy remotely and verify command
+        env:
+          INSTANCE_ID: ${{ inputs.instance_id }}
+          ARTIFACT_BUCKET: ${{ inputs.artifact_bucket }}
+          COGNITO_ISSUER_URI: ${{ inputs.cognito_issuer_uri }}
+          API_DOMAIN: ${{ inputs.api_domain }}
+        run: |
+          set -euo pipefail
+          base="s3://$ARTIFACT_BUCKET/releases/$GITHUB_SHA"
+          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' '$API_DOMAIN' '$COGNITO_ISSUER_URI'"
+          parameters="$(jq -nc --arg cmd "$cmd" '{commands:[$cmd],executionTimeout:["1800"]}')"
+          command_id="$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy WeuTube API $GITHUB_SHA" \
+            --parameters "$parameters" \
+            --query Command.CommandId --output text)"
+          echo "SSM deployment command: $command_id"
+          for attempt in $(seq 1 180); do
+            status="$(aws ssm get-command-invocation --command-id "$command_id" \
+              --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)"
+            case "$status" in
+              Success)
+                echo "Remote deployment and HTTPS health check succeeded"
+                exit 0 ;;
+              Failed|TimedOut|Cancelled|Cancelling)
+                echo "Deployment failed: $status" >&2
+                aws ssm get-command-invocation --command-id "$command_id" \
+                  --instance-id "$INSTANCE_ID" --query '[StandardOutputContent,StandardErrorContent]' \
+                  --output text
+                exit 1 ;;
+              *) sleep 10 ;;
+            esac
+          done
+          echo "Deployment verification timed out; see AWS Systems Manager Run Command" >&2
+          exit 1
