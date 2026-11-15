@@ -1,6 +1,5 @@
 package com.weutube.api;
 
-import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -66,9 +65,18 @@ public class YouTubeOAuthController {
  }
  @GetMapping("/callback")
  public Map<String,String> callback(@RequestParam String state,@RequestParam(required=false) String code) {
-  // Deliberately refuse to exchange tokens until secure token encryption, state consumption,
-  // verified channel identity and authorization are implemented.
+  // Do not exchange credentials until encrypted storage and channel verification exist.
+  // Validate state without consuming it: this callback is intentionally non-operational.
+  if (state == null || state.isBlank() || state.length() > 128)
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid OAuth state");
+  Integer valid=jdbc.queryForObject(
+   "SELECT count(*) FROM youtube_oauth_attempts WHERE state = ? AND expires_at > now() AND consumed_at IS NULL",
+   Integer.class,state);
+  if (valid == null || valid != 1)
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unknown or expired OAuth state");
+  if (code == null || code.isBlank())
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Missing authorization code");
   throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED,
-   "YouTube OAuth callback and encrypted token storage are not enabled");
+   "OAuth token exchange is disabled until encrypted storage and channel verification are ready");
  }
 }
