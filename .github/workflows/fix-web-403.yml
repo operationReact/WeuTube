@@ -1,0 +1,46 @@
+name: WeuTube - repair website 403 and verify HTTPS
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fix-web-403.yml']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::098859530205:role/weutube-prod-github-api-deploy
+          aws-region: ap-south-1
+      - name: Correct web asset permissions via AWS Systems Manager
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = 098859530205
+          cmd='cd /opt/weutube && test -f web-dist/index.html && find web-dist -type d -exec chmod 755 {} + && find web-dist -type f -exec chmod 644 {} + && docker compose restart web && docker compose exec -T web wget -qO- http://localhost/ | head -c 100'
+          params="$(jq -nc --arg cmd "$cmd" '{commands:[$cmd],executionTimeout:["120"]}')"
+          id="$(aws ssm send-command --instance-ids i-098ed59f1b1b66446 --document-name AWS-RunShellScript --parameters "$params" --query Command.CommandId --output text)"
+          for n in $(seq 1 35); do
+            status="$(aws ssm get-command-invocation --command-id "$id" --instance-id i-098ed59f1b1b66446 --query Status --output text 2>/dev/null || true)"
+            case "$status" in
+              Success)
+                echo "Static web assets now readable by nginx worker."
+                break ;;
+              Failed|TimedOut|Cancelled)
+                aws ssm get-command-invocation --command-id "$id" --instance-id i-098ed59f1b1b66446 --query '[StandardOutputContent,StandardErrorContent]' --output text
+                exit 1 ;;
+              *) sleep 3 ;;
+            esac
+          done
+      - name: Validate trusted public HTTPS on all WeuTube domains
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 https://api.weutube.com/actuator/health
+          echo
+          for host in weutube.com www.weutube.com; do
+            status="$(curl --fail --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "https://$host/")"
+            echo "$host HTTP $status"
+            test "$status" = 200
+          done
+          echo "Public HTTPS verified: website, www, and API."
