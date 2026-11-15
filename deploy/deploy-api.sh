@@ -4,14 +4,16 @@
 set -euo pipefail
 umask 077
 
-if [ "$#" -ne 4 ]; then
-  echo "Usage: deploy-api.sh <artifact-bucket> <commit-sha> <api-domain> <cognito-issuer>" >&2
+if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
+  echo "Usage: deploy-api.sh <artifact-bucket> <commit-sha> <api-domain> <cognito-issuer> [bootstrap|verify]" >&2
   exit 2
 fi
 BUCKET="$1"
 COMMIT="$2"
 DOMAIN="$3"
 ISSUER="$4"
+MODE="${5:-verify}"
+[[ "$MODE" == "bootstrap" || "$MODE" == "verify" ]] || { echo "Unsupported health-check mode" >&2; exit 2; }
 REGION="ap-south-1"
 [[ "$BUCKET" =~ ^[a-z0-9.-]+$ ]] || { echo "Invalid artifact bucket" >&2; exit 2; }
 [[ "$COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "Invalid revision" >&2; exit 2; }
@@ -87,6 +89,26 @@ mv web-dist.next web-dist
 docker compose config --quiet
 docker compose build --pull api
 docker compose up -d --remove-orphans --force-recreate
+# Bootstrap mode validates the live Spring Boot process inside the Docker
+# network before DNS is changed; it NEVER claims public HTTPS is ready.
+if [ "$MODE" = "bootstrap" ]; then
+  healthy=false
+  for _ in $(seq 1 36); do
+    if docker compose exec -T web wget -qO- http://api:8080/actuator/health >/dev/null 2>&1; then
+      healthy=true
+      break
+    fi
+    sleep 5
+  done
+  if [ "$healthy" != true ]; then
+    echo "Backend internal health check failed; inspect the API and database containers" >&2
+    exit 1
+  fi
+  printf '15 2 * * * root /opt/weutube/backup-db.sh %s >> /var/log/weutube-db-backup.log 2>&1\n' "$BUCKET" > /etc/cron.d/weutube-db-backup
+  chmod 644 /etc/cron.d/weutube-db-backup
+  echo "WeuTube backend internal health check passed; PUBLIC HTTPS NOT YET VERIFIED."
+  exit 0
+fi
 # Check the HTTPS site, including ACME certificate validation, not just the container exit code.
 healthy=false
 for _ in $(seq 1 36); do
