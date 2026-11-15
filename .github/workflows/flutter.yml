@@ -15,13 +15,13 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - run: flutter create --platforms=android,ios,web .
+        working-directory: apps/flutter
       - run: flutter pub get
         working-directory: apps/flutter
       - run: flutter analyze
         working-directory: apps/flutter
       - run: flutter test
-        working-directory: apps/flutter
-      - run: flutter create --platforms=android,ios,web .
         working-directory: apps/flutter
       - run: flutter build web --release
         working-directory: apps/flutter
