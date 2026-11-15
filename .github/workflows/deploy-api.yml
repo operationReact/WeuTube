@@ -70,6 +70,21 @@ jobs:
       - name: Verify and package API
         working-directory: services/api
         run: mvn -B clean verify
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Build Flutter website for the EC2 HTTPS host
+        working-directory: apps/flutter
+        run: |
+          flutter create --platforms=web --org com.weutube .
+          rm -f test/widget_test.dart analysis_options.yaml
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test test/app_test.dart
+          flutter build web --release
+      - name: Package website for EC2
+        run: |
+          (cd apps/flutter/build/web && zip -q -r "$GITHUB_WORKSPACE/web-dist.zip" .)
       - name: Upload immutable deployment release
         env:
           ARTIFACT_BUCKET: ${{ inputs.artifact_bucket }}
@@ -82,6 +97,7 @@ jobs:
           aws s3 cp deploy/Caddyfile "$base/Caddyfile" --only-show-errors
           aws s3 cp deploy/deploy-api.sh "$base/deploy-api.sh" --only-show-errors
           aws s3 cp deploy/backup-db.sh "$base/backup-db.sh" --only-show-errors
+          aws s3 cp web-dist.zip "$base/web-dist.zip" --only-show-errors
       - name: Deploy remotely and verify command
         env:
           INSTANCE_ID: ${{ inputs.instance_id }}
