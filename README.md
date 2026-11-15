@@ -10,6 +10,6 @@ Frontend-first implementation for the WeuTube creator platform.
 Colors: navy `#0B1F4D`, coral `#FF4B3A`, background `#F8F9FC`.
 
 ## Important
-All sign-in, uploads, earnings, wallet, approval and publishing flows are UI-only demonstrations until the backend is implemented. Do not use this prototype to collect credentials or process payments. No live YouTube upload/publishing is enabled.
+The Flutter sign-in, upload, analytics, earnings and payout screens are UI-only demonstrations. The Spring Boot backend now has draft/review APIs and server-side Google OAuth connection, encrypted channel credentials and token refresh; these are not deployed or verified against a live Google account. The demo Admin toggle is not secure authentication. Do not use the prototype to collect credentials or process payments. No live YouTube video upload/publishing is enabled. See `docs/youtube-channel-connection.md`.
 
 Flutter SDK is required to generate native platform scaffolding and build Android/iOS releases. iOS signing and App Store submission require Apple developer configuration.
