@@ -1,12 +1,20 @@
 # Optional cost-controlled EC2 API host, enabled only by explicit Terraform variable.
-variable "enable_api" { type = bool, default = false }
-variable "api_instance_type" { type = string, default = "t3.medium" }
+variable "enable_api" {
+  type = bool
+  default = false
+}
+variable "api_instance_type" {
+  type = string
+  default = "t3.medium"
+}
 variable "api_hosted_zone_id" {
   description = "Existing Route53 hosted zone ID; when empty, create the DNS A record manually."
   type = string
   default = ""
 }
-locals { api_domain = "api.${var.domain_name}" }
+locals {
+  api_domain = "api.${var.domain_name}"
+}
 
 data "aws_vpc" "api_default" { default = true }
 data "aws_subnets" "api_default" {
@@ -18,8 +26,14 @@ data "aws_subnets" "api_default" {
 data "aws_ami" "api_al2023" {
   most_recent = true
   owners = ["amazon"]
-  filter { name = "name", values = ["al2023-ami-2023.*-x86_64"] }
-  filter { name = "architecture", values = ["x86_64"] }
+  filter {
+    name = "name"
+    values = ["al2023-ami-2023.*-x86_64"]
+  }
+  filter {
+    name = "architecture"
+    values = ["x86_64"]
+  }
 }
 
 resource "aws_security_group" "api" {
