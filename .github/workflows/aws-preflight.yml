@@ -1,0 +1,55 @@
+name: WeuTube - AWS production prerequisites
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/aws-preflight.yml'
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS using existing OIDC role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+          role-session-name: weutube-infra-preflight
+      - name: Check account, state bucket, SSM and Terraform discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+          if [ "$ACCOUNT" != "098859530205" ]; then
+            echo "::error::Wrong AWS account: $ACCOUNT"
+            exit 1
+          fi
+          echo "Validated target AWS account $ACCOUNT"
+          failed=0
+          if aws s3api head-bucket --bucket weutube-prod-tfstate-098859530205 --region ap-south-1 >/dev/null 2>&1; then
+            echo "PASS: Terraform remote state S3 bucket is accessible"
+          else
+            echo "::warning::Terraform state bucket not present or not accessible: weutube-prod-tfstate-098859530205"
+            failed=1
+          fi
+          for name in client-id client-secret token-key-base64; do
+            if aws ssm get-parameter --name "/weutube/prod/youtube/$name" --region ap-south-1 --with-decryption --query 'Parameter.Name' --output text >/dev/null 2>&1; then
+              echo "PASS: OAuth SSM $name is accessible"
+            else
+              echo "::warning::OAuth SSM $name not accessible, missing, or KMS denied"
+              failed=1
+            fi
+          done
+          if aws ec2 describe-vpcs --region ap-south-1 --query 'Vpcs[?IsDefault==`true`].VpcId' --output text >/dev/null 2>&1; then
+            echo "PASS: EC2 VPC discovery permitted"
+          else
+            echo "::warning::EC2 VPC discovery denied by IAM"
+            failed=1
+          fi
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::AWS bootstrap prerequisites remain incomplete. See messages above. No resources were created."
+            exit 1
+          fi
+          echo "Read-only infrastructure preflight passed. Terraform permissions and deployment are not yet proven."
