@@ -15,8 +15,10 @@ resource "aws_iam_role" "github_api_deploy" {
       Principal = { Federated = var.github_oidc_provider_arn }
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
-        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike = { "token.actions.githubusercontent.com:sub" = "repo:operationReact/WeuTube:ref:refs/heads/main" }
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = "repo:operationReact@215111824/WeuTube@1458924161:ref:refs/heads/main"
+        }
       }
     }]
   })
