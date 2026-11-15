@@ -81,6 +81,7 @@ jobs:
           aws s3 cp deploy/docker-compose.yml "$base/docker-compose.yml" --only-show-errors
           aws s3 cp deploy/Caddyfile "$base/Caddyfile" --only-show-errors
           aws s3 cp deploy/deploy-api.sh "$base/deploy-api.sh" --only-show-errors
+          aws s3 cp deploy/backup-db.sh "$base/backup-db.sh" --only-show-errors
       - name: Deploy remotely and verify command
         env:
           INSTANCE_ID: ${{ inputs.instance_id }}
