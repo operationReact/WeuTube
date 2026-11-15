@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'approved_brand_icon.dart';
 
 const navy = Color(0xFF0B1F4D);
 const coral = Color(0xFFFF4B3A);
@@ -12,36 +14,12 @@ class WeuTubeBrand extends StatelessWidget {
   const WeuTubeBrand({super.key, this.size = 24});
   @override
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-    CustomPaint(size: Size(size * 1.25, size), painter: _CommunityMark()),
+    Image.memory(base64Decode(approvedBrandIconBase64),
+      width: size * 1.25, height: size, fit: BoxFit.contain),
     SizedBox(width: size * .28),
     Text('Weu', style: TextStyle(color: navy, fontSize: size, fontWeight: FontWeight.w900, letterSpacing: -.6)),
     Text('Tube', style: TextStyle(color: coral, fontSize: size, fontWeight: FontWeight.w900, letterSpacing: -.6)),
   ]);
-}
-
-/// Vector approximation for compact navigation; the approved original artwork
-/// must replace this painter before release.
-class _CommunityMark extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width, h = size.height;
-    canvas.drawCircle(Offset(w * .31, h * .16), h * .115, Paint()..color = navy);
-    canvas.drawCircle(Offset(w * .77, h * .16), h * .115, Paint()..color = coral);
-    final stroke = Paint()..style = PaintingStyle.stroke..strokeWidth = h * .28
-      ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
-    stroke.color = navy;
-    final a = Path()..moveTo(w * .12, h * .40)..lineTo(w * .31, h * .81)
-      ..quadraticBezierTo(w * .42, h * .92, w * .52, h * .67)
-      ..quadraticBezierTo(w * .58, h * .49, w * .65, h * .61);
-    canvas.drawPath(a, stroke);
-    stroke.color = coral;
-    final b = Path()..moveTo(w * .52, h * .81)
-      ..quadraticBezierTo(w * .64, h * .92, w * .73, h * .76)
-      ..lineTo(w * .92, h * .41);
-    canvas.drawPath(b, stroke);
-  }
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class WeuTubeProduct extends StatefulWidget {
