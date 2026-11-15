@@ -108,6 +108,27 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "api_artifacts" {
     apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
   }
 }
+resource "aws_s3_bucket_versioning" "api_artifacts" {
+  count = var.enable_api ? 1 : 0
+  bucket = aws_s3_bucket.api_artifacts[0].id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+resource "aws_s3_bucket_lifecycle_configuration" "api_artifacts" {
+  count = var.enable_api ? 1 : 0
+  bucket = aws_s3_bucket.api_artifacts[0].id
+  rule {
+    id = "expire-old-database-backups"
+    status = "Enabled"
+    filter {
+      prefix = "backups/"
+    }
+    expiration {
+      days = 90
+    }
+  }
+}
 resource "aws_iam_role_policy" "api_artifacts_read" {
   count = var.enable_api ? 1 : 0
   role = aws_iam_role.api[0].id
@@ -117,7 +138,11 @@ resource "aws_iam_role_policy" "api_artifacts_read" {
     Statement = [{
       Effect = "Allow"
       Action = ["s3:GetObject"]
-      Resource = "${aws_s3_bucket.api_artifacts[0].arn}/*"
+      Resource = "${aws_s3_bucket.api_artifacts[0].arn}/releases/*"
+    }, {
+      Effect = "Allow"
+      Action = ["s3:PutObject"]
+      Resource = "${aws_s3_bucket.api_artifacts[0].arn}/backups/*"
     }]
   })
 }
