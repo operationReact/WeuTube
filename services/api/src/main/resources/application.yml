@@ -30,6 +30,8 @@ management:
 # Never place OAuth credentials in source control.
 weutube:
   youtube:
+    ssm-enabled: ${WEUTUBE_YOUTUBE_SSM_ENABLED:false}
+    ssm-region: ${WEUTUBE_YOUTUBE_SSM_REGION:ap-south-1}
     client-id: ${WEUTUBE_YOUTUBE_CLIENT_ID:}
     client-secret: ${WEUTUBE_YOUTUBE_CLIENT_SECRET:}
     redirect-uri: ${WEUTUBE_YOUTUBE_REDIRECT_URI:}
