@@ -7,6 +7,9 @@ resource "aws_cognito_user_pool" "weutube" {
   username_attributes = ["email"]
   auto_verified_attributes = ["email"]
   mfa_configuration = "OPTIONAL"
+  software_token_mfa_configuration {
+    enabled = true
+  }
   password_policy {
     minimum_length = 12
     require_lowercase = true
