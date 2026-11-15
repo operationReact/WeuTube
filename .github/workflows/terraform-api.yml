@@ -1,5 +1,10 @@
-name: WeuTube infrastructure - plan or apply (manual)
+name: WeuTube infrastructure - automatic plan, manual apply
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/terraform/**'
+      - '.github/workflows/terraform-api.yml'
   workflow_dispatch:
     inputs:
       operation:
@@ -37,9 +42,9 @@ jobs:
       - name: Validate infrastructure inputs
         env:
           ROLE: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
-          STATE_BUCKET: ${{ inputs.state_bucket }}
-          HOSTED_ZONE: ${{ inputs.hosted_zone_id }}
-          OIDC_PROVIDER: ${{ inputs.github_oidc_provider_arn }}
+          STATE_BUCKET: ${{ inputs.state_bucket || 'weutube-prod-tfstate-098859530205' }}
+          HOSTED_ZONE: ${{ inputs.hosted_zone_id || '' }}
+          OIDC_PROVIDER: ${{ inputs.github_oidc_provider_arn || 'arn:aws:iam::098859530205:oidc-provider/token.actions.githubusercontent.com' }}
         run: |
           set -euo pipefail
           test -n "$ROLE" || { echo "WEUTUBE_TERRAFORM_ROLE_TO_ASSUME secret is required" >&2; exit 1; }
@@ -68,7 +73,7 @@ jobs:
       - name: Initialize encrypted and locked S3 remote state
         working-directory: infra/terraform
         env:
-          STATE_BUCKET: ${{ inputs.state_bucket }}
+          STATE_BUCKET: ${{ inputs.state_bucket || 'weutube-prod-tfstate-098859530205' }}
         run: |
           terraform fmt -recursive
           terraform init -input=false \
@@ -81,15 +86,15 @@ jobs:
       - name: Generate production plan
         working-directory: infra/terraform
         env:
-          HOSTED_ZONE: ${{ inputs.hosted_zone_id }}
-          OIDC_PROVIDER: ${{ inputs.github_oidc_provider_arn }}
+          HOSTED_ZONE: ${{ inputs.hosted_zone_id || '' }}
+          OIDC_PROVIDER: ${{ inputs.github_oidc_provider_arn || 'arn:aws:iam::098859530205:oidc-provider/token.actions.githubusercontent.com' }}
         run: |
           terraform plan -input=false -out=prod.tfplan \
             -var="enable_api=true" \
             -var="api_hosted_zone_id=$HOSTED_ZONE" \
             -var="github_oidc_provider_arn=$OIDC_PROVIDER"
       - name: Apply exact reviewed Terraform plan
-        if: inputs.operation == 'apply'
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'apply'
         working-directory: infra/terraform
         run: terraform apply -input=false -auto-approve prod.tfplan
       - name: Show nonsecret connection outputs
