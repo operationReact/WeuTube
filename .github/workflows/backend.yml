@@ -20,7 +20,7 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: services/api/pom.xml
-      - run: mvn -B -DskipTests package
+      - run: mvn -B verify
         working-directory: services/api
   terraform:
     runs-on: ubuntu-latest
