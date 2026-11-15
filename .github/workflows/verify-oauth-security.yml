@@ -1,0 +1,27 @@
+name: WeuTube - production OAuth endpoint smoke test
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-oauth-security.yml']
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify API and authentication boundaries
+        run: |
+          set -euo pipefail
+          base="https://api.weutube.com"
+          health="$(curl --silent --show-error --fail --max-time 12 "$base/actuator/health")"
+          echo "$health" | jq -e '.status == "UP"' >/dev/null
+          code="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 12 "$base/api/admin/youtube/callback?state=invalid&code=invalid")"
+          echo "Invalid OAuth state HTTP $code"
+          test "$code" = "400"
+          auth="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 12 -X POST "$base/api/admin/youtube/authorization")"
+          echo "Unauthorized OAuth start HTTP $auth"
+          test "$auth" = "401" || test "$auth" = "403"
+          channels="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 12 "$base/api/admin/youtube/channels")"
+          echo "Unauthorized channel list HTTP $channels"
+          test "$channels" = "401" || test "$channels" = "403"
+          echo "Production OAuth endpoint security smoke checks passed. No Google account connected by this test."
