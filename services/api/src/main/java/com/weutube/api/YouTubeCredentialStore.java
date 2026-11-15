@@ -3,6 +3,8 @@ package com.weutube.api;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.UUID;
+import java.util.Optional;
+import org.springframework.transaction.annotation.Transactional;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -35,6 +37,44 @@ public class YouTubeCredentialStore {
   }
  }
  public boolean configured() { return key!=null; }
+ /**
+  * Internal-only storage. Call only after independently verifying the Google channel ID.
+  * No credential plaintext is returned to the HTTP layer.
+  */
+ @Transactional
+ public void saveVerifiedChannel(String channelId,String displayName,String refreshToken,String adminSub) {
+  if (channelId==null || channelId.isBlank() || displayName==null || displayName.isBlank()
+      || adminSub==null || adminSub.isBlank())
+   throw new IllegalArgumentException("Verified channel metadata is required");
+  String encrypted=encrypt(refreshToken,channelId);
+  jdbc.update("""
+   INSERT INTO youtube_oauth_credentials
+   (id,youtube_channel_id,channel_display_name,refresh_token_ciphertext,encryption_key_reference,connected_by_sub)
+   VALUES (?,?,?,?,?,?)
+   ON CONFLICT (youtube_channel_id) DO UPDATE SET
+   channel_display_name=EXCLUDED.channel_display_name,
+   refresh_token_ciphertext=EXCLUDED.refresh_token_ciphertext,
+   encryption_key_reference=EXCLUDED.encryption_key_reference,
+   connected_by_sub=EXCLUDED.connected_by_sub,
+   updated_at=now()
+   """,UUID.randomUUID(),channelId,displayName,encrypted,"env:v1",adminSub);
+ }
+ @Transactional(readOnly=true)
+ public Optional<String> loadRefreshToken(String channelId) {
+  if (channelId==null || channelId.isBlank()) throw new IllegalArgumentException("Channel ID required");
+  java.util.List<String> ciphertexts=jdbc.queryForList(
+   "SELECT refresh_token_ciphertext FROM youtube_oauth_credentials WHERE youtube_channel_id = ?",
+   String.class,channelId);
+  return ciphertexts.stream().findFirst().map(ciphertext->decrypt(ciphertext,channelId));
+ }
+ @Transactional(readOnly=true)
+ public java.util.List<ChannelSummary> connectedChannels() {
+  return jdbc.query("""
+   SELECT youtube_channel_id,channel_display_name,connected_at
+   FROM youtube_oauth_credentials ORDER BY connected_at DESC
+   """,(rs,row)->new ChannelSummary(rs.getString(1),rs.getString(2),rs.getTimestamp(3).toInstant()));
+ }
+ public record ChannelSummary(String channelId,String displayName,java.time.Instant connectedAt) {}
  private byte[] requireKey() {
   if (key==null) throw new IllegalStateException("YouTube token encryption is not configured");
   return key;
