@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +20,35 @@ public class CreatorVideoController {
  }
  public record DraftRequest(@NotBlank @Size(max=200) String title) {}
  public record VideoResponse(UUID id,String title,String status) {}
+ private VideoSubmission ownedDraft(Jwt jwt, UUID id) {
+  VideoSubmission video=videos.findById(id)
+    .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Draft not found"));
+  if (!video.creator.cognitoSub.equals(jwt.getSubject()))
+    throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Draft not found");
+  if (!"DRAFT".equals(video.status))
+    throw new ResponseStatusException(HttpStatus.CONFLICT,"Only drafts can be modified");
+  return video;
+ }
+ @PatchMapping("/videos/drafts/{id}")
+ @Transactional
+ public VideoResponse renameDraft(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
+   @PathVariable UUID id, @Valid @RequestBody DraftRequest request) {
+  String title=request.title().trim();
+  if (title.isEmpty())
+    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Title cannot be blank");
+  VideoSubmission video=ownedDraft(jwt,id);
+  video.title=title;
+  video.updatedAt=java.time.Instant.now();
+  videos.save(video);
+  return new VideoResponse(video.id,video.title,video.status);
+ }
+ @DeleteMapping("/videos/drafts/{id}")
+ @Transactional
+ @ResponseStatus(HttpStatus.NO_CONTENT)
+ public void deleteDraft(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
+   @PathVariable UUID id) {
+  videos.delete(ownedDraft(jwt,id));
+ }
  @PostMapping("/videos/drafts")
  @Transactional
  public ResponseEntity<VideoResponse> createDraft(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
@@ -25,7 +56,9 @@ public class CreatorVideoController {
   String sub=jwt.getSubject();
   Creator creator=creators.findByCognitoSub(sub)
    .orElseGet(()->creators.save(new Creator(sub,"Creator")));
-  VideoSubmission video=videos.save(new VideoSubmission(creator,request.title().trim()));
+  String title=request.title().trim();
+  if (title.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Title cannot be blank");
+  VideoSubmission video=videos.save(new VideoSubmission(creator,title));
   return ResponseEntity.status(201).body(new VideoResponse(video.id,video.title,video.status));
  }
  @GetMapping("/videos")
