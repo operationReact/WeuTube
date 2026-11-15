@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 dnf update -y
-dnf install -y docker curl jq python3 awscli-2 cronie
+dnf install -y docker curl jq python3 awscli-2 cronie unzip
 systemctl enable --now docker
 systemctl enable --now crond
 systemctl enable --now amazon-ssm-agent
