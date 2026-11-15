@@ -1,0 +1,35 @@
+name: Backend validation
+on:
+  push:
+    paths:
+      - 'services/api/**'
+      - 'infra/terraform/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'services/api/**'
+      - 'infra/terraform/**'
+jobs:
+  java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/api/pom.xml
+      - run: mvn -B -DskipTests package
+        working-directory: services/api
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive
+        working-directory: infra/terraform
+      - run: terraform init -backend=false
+        working-directory: infra/terraform
+      - run: terraform validate
+        working-directory: infra/terraform
