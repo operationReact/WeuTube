@@ -1,0 +1,79 @@
+name: WeuTube - one-time production infrastructure apply
+# This workflow fires on its own initial commit to main, and is not a
+# recurring deploy workflow. Future changes use terraform-api.yml.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/weutube-prod-first-apply.yml'
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: weutube-terraform-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assume restricted GitHub Terraform IAM role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+          role-session-name: weutube-first-production-apply
+      - name: Guard the exact AWS account and state bucket
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "098859530205"
+          aws s3api head-bucket --bucket weutube-prod-tfstate-098859530205 --region ap-south-1
+          for key in client-id client-secret token-key-base64; do
+            aws ssm get-parameter --name "/weutube/prod/youtube/$key" --with-decryption --query Parameter.Name --output text > /dev/null
+          done
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.0'
+      - name: Initialize shared and locked Terraform state
+        working-directory: infra/terraform
+        run: |
+          terraform fmt -recursive
+          terraform init -input=false \
+            -backend-config="bucket=weutube-prod-tfstate-098859530205" \
+            -backend-config="key=weutube/prod/terraform.tfstate" \
+            -backend-config="region=ap-south-1" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          terraform validate
+      - name: Prepare and inspect exact production plan
+        working-directory: infra/terraform
+        run: |
+          set -euo pipefail
+          terraform plan -input=false -out=prod.tfplan \
+            -var="enable_api=true" \
+            -var="api_hosted_zone_id=" \
+            -var="github_oidc_provider_arn=arn:aws:iam::098859530205:oidc-provider/token.actions.githubusercontent.com"
+          terraform show -json prod.tfplan > prod-plan.json
+          jq -e '[.resource_changes[]? | select(.change.actions | index("delete") or index("update"))] | length == 0' prod-plan.json
+          adds="$(jq '[.resource_changes[]? | select(.change.actions | index("create"))] | length' prod-plan.json)"
+          if [ "$adds" -lt 1 ] || [ "$adds" -gt 40 ]; then
+            echo "::error::Unexpected plan resource count: $adds. Refusing apply." >&2
+            exit 1
+          fi
+          echo "Approved-safe first apply plan: $adds creates, zero deletes/updates"
+      - name: Apply planned infrastructure
+        working-directory: infra/terraform
+        run: terraform apply -input=false -auto-approve prod.tfplan
+      - name: Show non-secret production outputs
+        working-directory: infra/terraform
+        run: |
+          {
+            echo "## WeuTube production infrastructure"
+            echo 'Prerequisite: configure Hostinger API DNS before HTTPS deployment.'
+            for key in api_instance_id api_eip api_artifacts_bucket cognito_user_pool_id cognito_client_id cognito_issuer_uri github_api_deploy_role_arn web_bucket cloudfront_domain; do
+              val="$(terraform output -raw "$key" 2>/dev/null || true)"
+              if [ -n "$val" ] && [ "$val" != "null" ]; then
+                printf '%s: %s\n' "$key" "$val"
+              fi
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
