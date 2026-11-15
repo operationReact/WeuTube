@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 dnf update -y
-dnf install -y docker curl jq python3 awscli-2
+dnf install -y docker curl jq python3 awscli-2 cronie
 systemctl enable --now docker
+systemctl enable --now crond
 systemctl enable --now amazon-ssm-agent
 mkdir -p /usr/local/lib/docker/cli-plugins /opt/weutube/secrets
 chmod 0700 /opt/weutube/secrets
