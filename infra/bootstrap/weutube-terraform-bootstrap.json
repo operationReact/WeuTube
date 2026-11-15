@@ -1,0 +1,285 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "One-time WeuTube bootstrap: private locked/versioned S3 Terraform state and project-scoped initial Terraform IAM rights. Review before deployment.",
+  "Parameters": {
+    "ExistingGithubRoleName": {
+      "Type": "String",
+      "Default": "weutube-prod-terraform-github",
+      "AllowedPattern": "[A-Za-z0-9+=,.@_-]+",
+      "Description": "Existing IAM role successfully tested with GitHub OIDC"
+    },
+    "CreateStateBucket": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Select false only if exact private state bucket already exists in this AWS account"
+    }
+  },
+  "Conditions": {
+    "CreateBucket": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateStateBucket"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "TerraformStateBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "CreateBucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": "weutube-prod-tfstate-098859530205",
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "weutube"
+          },
+          {
+            "Key": "Environment",
+            "Value": "prod"
+          }
+        ]
+      }
+    },
+    "StateBucketHttpsPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Condition": "CreateBucket",
+      "Properties": {
+        "Bucket": {
+          "Ref": "TerraformStateBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyPlainHttp",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                "arn:aws:s3:::weutube-prod-tfstate-098859530205",
+                "arn:aws:s3:::weutube-prod-tfstate-098859530205/*"
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "TerraformBootstrapRolePolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "weutube-prod-terraform-bootstrap",
+        "Roles": [
+          {
+            "Ref": "ExistingGithubRoleName"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "TerraformStateBucketMetadata",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation",
+                "s3:GetBucketVersioning"
+              ],
+              "Resource": "arn:aws:s3:::weutube-prod-tfstate-098859530205"
+            },
+            {
+              "Sid": "TerraformStateReadWriteLock",
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+              ],
+              "Resource": [
+                "arn:aws:s3:::weutube-prod-tfstate-098859530205/weutube/prod/terraform.tfstate",
+                "arn:aws:s3:::weutube-prod-tfstate-098859530205/weutube/prod/terraform.tfstate.tflock"
+              ]
+            },
+            {
+              "Sid": "WeuTubeServiceBuckets",
+              "Effect": "Allow",
+              "Action": "s3:*",
+              "Resource": [
+                "arn:aws:s3:::weutube-prod-*",
+                "arn:aws:s3:::weutube-prod-*/*"
+              ]
+            },
+            {
+              "Sid": "WeuTubeEC2Provisioning",
+              "Effect": "Allow",
+              "Action": "ec2:*",
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "ap-south-1"
+                }
+              }
+            },
+            {
+              "Sid": "WeuTubeCognitoProvisioning",
+              "Effect": "Allow",
+              "Action": "cognito-idp:*",
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "ap-south-1"
+                }
+              }
+            },
+            {
+              "Sid": "CloudFrontProvisioning",
+              "Effect": "Allow",
+              "Action": "cloudfront:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "ReadIAMInventories",
+              "Effect": "Allow",
+              "Action": [
+                "iam:ListRoles",
+                "iam:ListPolicies",
+                "iam:ListInstanceProfiles",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListRolePolicies"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "WeuTubeIAMRoles",
+              "Effect": "Allow",
+              "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:UpdateAssumeRolePolicy",
+                "iam:TagRole",
+                "iam:UntagRole",
+                "iam:PutRolePolicy",
+                "iam:GetRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:ListRolePolicies",
+                "iam:ListAttachedRolePolicies"
+              ],
+              "Resource": "arn:aws:iam::098859530205:role/weutube-prod-*"
+            },
+            {
+              "Sid": "WeuTubeIAMPolicies",
+              "Effect": "Allow",
+              "Action": [
+                "iam:CreatePolicy",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion",
+                "iam:ListPolicyVersions",
+                "iam:CreatePolicyVersion",
+                "iam:DeletePolicyVersion",
+                "iam:DeletePolicy",
+                "iam:TagPolicy",
+                "iam:UntagPolicy"
+              ],
+              "Resource": "arn:aws:iam::098859530205:policy/weutube-prod-*"
+            },
+            {
+              "Sid": "ReadAWSManagedSSMPolicy",
+              "Effect": "Allow",
+              "Action": [
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion"
+              ],
+              "Resource": "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+            },
+            {
+              "Sid": "WeuTubeIAMInstanceProfiles",
+              "Effect": "Allow",
+              "Action": [
+                "iam:CreateInstanceProfile",
+                "iam:DeleteInstanceProfile",
+                "iam:GetInstanceProfile",
+                "iam:AddRoleToInstanceProfile",
+                "iam:RemoveRoleFromInstanceProfile",
+                "iam:TagInstanceProfile",
+                "iam:UntagInstanceProfile"
+              ],
+              "Resource": "arn:aws:iam::098859530205:instance-profile/weutube-prod-*"
+            },
+            {
+              "Sid": "PassOnlyWeuTubeEC2Role",
+              "Effect": "Allow",
+              "Action": "iam:PassRole",
+              "Resource": "arn:aws:iam::098859530205:role/weutube-prod-api-instance-role",
+              "Condition": {
+                "StringEquals": {
+                  "iam:PassedToService": "ec2.amazonaws.com"
+                }
+              }
+            },
+            {
+              "Sid": "ReadExistingGoogleParameters",
+              "Effect": "Allow",
+              "Action": "ssm:GetParameter",
+              "Resource": [
+                "arn:aws:ssm:ap-south-1:098859530205:parameter/weutube/prod/youtube/client-id",
+                "arn:aws:ssm:ap-south-1:098859530205:parameter/weutube/prod/youtube/client-secret",
+                "arn:aws:ssm:ap-south-1:098859530205:parameter/weutube/prod/youtube/token-key-base64"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "TerraformStateBucketName": {
+      "Value": "weutube-prod-tfstate-098859530205",
+      "Description": "Pass as state_bucket when running the infrastructure Terraform workflow"
+    },
+    "GithubTerraformRoleName": {
+      "Value": {
+        "Ref": "ExistingGithubRoleName"
+      }
+    }
+  }
+}
