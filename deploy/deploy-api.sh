@@ -35,6 +35,14 @@ if ! docker compose version >/dev/null 2>&1; then
   chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 fi
 docker compose version
+if ! docker buildx version >/dev/null 2>&1; then
+  mkdir -p /usr/local/lib/docker/cli-plugins
+  curl --fail --location --retry 3 --silent --show-error \
+    https://github.com/docker/buildx/releases/download/v0.19.0/buildx-v0.19.0.linux-amd64 \
+    --output /usr/local/lib/docker/cli-plugins/docker-buildx
+  chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+fi
+docker buildx version
 if ! command -v crontab >/dev/null 2>&1; then
   dnf install -y cronie
 fi
