@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Invoked on the EC2 instance through AWS Systems Manager Run Command.
+# Requires only IAM instance-role credentials, not long-lived AWS keys.
+set -euo pipefail
+umask 077
+
+if [ "$#" -ne 4 ]; then
+  echo "Usage: deploy-api.sh <artifact-bucket> <commit-sha> <api-domain> <cognito-issuer>" >&2
+  exit 2
+fi
+BUCKET="$1"
+COMMIT="$2"
+DOMAIN="$3"
+ISSUER="$4"
+REGION="ap-south-1"
+[[ "$BUCKET" =~ ^[a-z0-9.-]+$ ]] || { echo "Invalid artifact bucket" >&2; exit 2; }
+[[ "$COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "Invalid revision" >&2; exit 2; }
+[[ "$DOMAIN" =~ ^[a-z0-9.-]+$ ]] || { echo "Invalid API domain" >&2; exit 2; }
+[[ "$ISSUER" =~ ^https://cognito-idp\.ap-south-1\.amazonaws\.com/ap-south-1_[A-Za-z0-9]+$ ]] || {
+  echo "Invalid Cognito issuer" >&2; exit 2;
+}
+cd /opt/weutube
+mkdir -p secrets
+chmod 700 secrets
+
+temp="$(mktemp -d)"
+trap 'rm -rf "$temp"' EXIT
+for file in app.jar Dockerfile docker-compose.yml Caddyfile; do
+  aws s3 cp --region "$REGION" "s3://$BUCKET/releases/$COMMIT/$file" "$temp/$file" --only-show-errors
+done
+
+# Create stable PostgreSQL credentials once; never regenerate them on redeploy.
+if [ ! -f secrets/db.env ]; then
+  DB_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+  printf 'POSTGRES_USER=weutube\nPOSTGRES_PASSWORD=%s\n' "$DB_PASSWORD" > secrets/db.env
+fi
+chmod 600 secrets/db.env
+# Safe because the generated password contains only hexadecimal characters.
+set -a
+# shellcheck disable=SC1091
+source secrets/db.env
+set +a
+
+# Fetch three exact parameter names that the owner already created in SSM.
+# Do not enable shell tracing or print these values.
+CLIENT_ID="$(aws ssm get-parameter --region "$REGION" --name /weutube/prod/youtube/client-id --with-decryption --query Parameter.Value --output text)"
+CLIENT_SECRET="$(aws ssm get-parameter --region "$REGION" --name /weutube/prod/youtube/client-secret --with-decryption --query Parameter.Value --output text)"
+TOKEN_KEY="$(aws ssm get-parameter --region "$REGION" --name /weutube/prod/youtube/token-key-base64 --with-decryption --query Parameter.Value --output text)"
+
+if [[ -z "$CLIENT_ID" || -z "$CLIENT_SECRET" || -z "$TOKEN_KEY" ]]; then
+  echo "Required YouTube configuration is unavailable" >&2
+  exit 1
+fi
+
+# Generate environment file without emitting its contents in SSM command logs.
+# The API process reads SSM directly at startup as well (role permissions needed).
+cat > secrets/app.env <<EOF
+PORT=8080
+DATABASE_URL=jdbc:postgresql://postgres:5432/weutube
+DATABASE_USERNAME=weutube
+DATABASE_PASSWORD=$POSTGRES_PASSWORD
+COGNITO_ISSUER_URI=$ISSUER
+WEUTUBE_YOUTUBE_SSM_ENABLED=true
+WEUTUBE_YOUTUBE_SSM_REGION=$REGION
+WEUTUBE_YOUTUBE_REDIRECT_URI=https://$DOMAIN/api/admin/youtube/callback
+EOF
+chmod 600 secrets/app.env
+printf 'WEUTUBE_API_DOMAIN=%s\n' "$DOMAIN" > .env
+chmod 600 .env
+
+# The app itself loads OAuth secrets via AWS SDK; do not put them in app.env.
+install -m 600 "$temp/app.jar" app.jar
+install -m 644 "$temp/Dockerfile" Dockerfile
+install -m 600 "$temp/docker-compose.yml" docker-compose.yml
+install -m 644 "$temp/Caddyfile" Caddyfile
+
+docker compose config --quiet
+docker compose build --pull api
+docker compose up -d --remove-orphans
+# Check the HTTPS site, including ACME certificate validation, not just the container exit code.
+healthy=false
+for _ in $(seq 1 36); do
+  if curl --silent --show-error --fail --max-time 5 \
+    --resolve "$DOMAIN:443:127.0.0.1" \
+    "https://$DOMAIN/actuator/health" >/dev/null 2>&1; then
+    healthy=true
+    break
+  fi
+  sleep 5
+done
+if [ "$healthy" != true ]; then
+  echo "HTTPS health check failed; check DNS, certificate, and API logs via SSM" >&2
+  exit 1
+fi
+echo "WeuTube backend HTTPS health check passed for deployment $COMMIT"
