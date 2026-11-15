@@ -1,11 +1,28 @@
 terraform {
- required_version = ">= 1.6.0"
- required_providers {
-  aws = { source = "hashicorp/aws", version = "~> 5.0" }
- }
+  required_version = ">= 1.6.0"
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
 }
-provider "aws" { region = var.aws_region }
-variable "aws_region" { type = string; default = "ap-south-1" }
-variable "project" { type = string; default = "weutube" }
-variable "environment" { type = string; default = "prod" }
-variable "domain_name" { type = string; default = "weutube.com" }
+provider "aws" {
+  region = var.aws_region
+}
+variable "aws_region" {
+  type = string
+  default = "ap-south-1"
+}
+variable "project" {
+  type = string
+  default = "weutube"
+}
+variable "environment" {
+  type = string
+  default = "prod"
+}
+variable "domain_name" {
+  type = string
+  default = "weutube.com"
+}
