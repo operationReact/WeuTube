@@ -56,6 +56,35 @@ public class GoogleYouTubeClient {
   }
  }
 
+ /**
+  * Exchanges a stored Google refresh token for a fresh short-lived access token.
+  * Intended only for internal YouTube publishing/metadata services.
+  */
+ public String refreshAccessToken(String refreshToken) {
+  if (!configured()) throw new IllegalStateException("Google OAuth is not configured");
+  if (refreshToken==null || refreshToken.isBlank())
+   throw new IllegalArgumentException("Refresh token required");
+  var form=new LinkedMultiValueMap<String,String>();
+  form.add("client_id",clientId);
+  form.add("client_secret",clientSecret);
+  form.add("refresh_token",refreshToken);
+  form.add("grant_type","refresh_token");
+  try {
+   JsonNode response=http.post().uri(TOKEN_ENDPOINT)
+     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+     .body(form).retrieve().body(JsonNode.class);
+   return parseRefreshedAccessToken(response);
+  } catch (RestClientException ex) {
+   throw new ProviderException("Google access token refresh failed",ex);
+  }
+ }
+
+ static String parseRefreshedAccessToken(JsonNode response) {
+  if (response==null || response.path("access_token").asText("").isBlank())
+   throw new ProviderException("Google did not return a refreshed access token");
+  return response.path("access_token").asText();
+ }
+
  public Channel channelFor(String accessToken) {
   try {
    JsonNode response=http.get().uri(CHANNEL_ENDPOINT)
