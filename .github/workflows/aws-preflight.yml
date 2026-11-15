@@ -48,6 +48,16 @@ jobs:
             echo "::warning::EC2 VPC discovery denied by IAM"
             failed=1
           fi
+          echo "Checking whether the CloudFormation bootstrap stack can be inspected"
+          stack_state="$(aws cloudformation describe-stacks --stack-name weutube-terraform-bootstrap --region ap-south-1 --query 'Stacks[0].StackStatus' --output text 2>/dev/null || true)"
+          if [ -n "$stack_state" ]; then
+            echo "CloudFormation status: $stack_state"
+            aws cloudformation describe-stack-events --stack-name weutube-terraform-bootstrap --region ap-south-1 \
+              --query 'StackEvents[?contains(ResourceStatus, `FAILED`)].[LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+              --output table || true
+          else
+            echo "CloudFormation stack details are not accessible with this IAM role"
+          fi
           if [ "$failed" -ne 0 ]; then
             echo "::error::AWS bootstrap prerequisites remain incomplete. See messages above. No resources were created."
             exit 1
