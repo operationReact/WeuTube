@@ -1,7 +1,9 @@
 import 'dart:convert';
 
-/// Source: YouTube Help / Data API Upload limits. NOT WeuTube's effective
-/// transport capacity: it still uses a single synchronous multipart gateway.
+/// YouTube is authoritative about accepted file size, duration and formats.
+/// Create uses the resumable YouTube-native API. The smaller directGateway
+/// constant is retained solely for older clients using the deprecated
+/// synchronous multipart endpoint; it is not the current Create video limit.
 class YouTubeUploadRules {
   static const youtubeMaxBytes = 256 * 1024 * 1024 * 1024;
   static const youtubeMaxDurationSeconds = 12 * 60 * 60;
