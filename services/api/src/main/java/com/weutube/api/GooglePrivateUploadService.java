@@ -64,21 +64,23 @@ public class GooglePrivateUploadService {
    throw new UploadFailed("Private video ownership or visibility could not be verified");
   return new Uploaded(id,channel,privacy);
  }
- public Uploaded upload(String channelId,String title,MultipartFile video) {
+ public Uploaded upload(String channelId,String title,String description,MultipartFile video) {
   long size=video.getSize();
-  String mediaType=video.getContentType();
   if(size<=0 || size>MAX_UPLOAD_BYTES)
-   throw new IllegalArgumentException("Video must be between 1 byte and 256 MB");
-  if(mediaType==null || !mediaType.matches("video/[a-zA-Z0-9.+-]{1,50}"))
-   throw new IllegalArgumentException("A video media type is required");
-  if(title==null || title.isBlank() || title.length()>100)
-   throw new IllegalArgumentException("YouTube video title must be 1-100 characters");
+   throw new IllegalArgumentException("Current direct upload allows up to 256 MiB");
+  String mediaType=YouTubeUploadConstraints.mimeForName(video.getOriginalFilename());
+  if(mediaType==null)
+   throw new IllegalArgumentException("File format not supported by YouTube");
+  // File names and MIME hints are not a substitute for provider verification;
+  // Google can still reject an unsupported or malformed codec/container.
+  YouTubeUploadConstraints.validatedTitle(title);
+  YouTubeUploadConstraints.validatedDescription(description);
   try {
    String token=accessTokens.forChannel(channelId);
    if(!channelId.equals(google.channelFor(token).id()))
     throw new UploadFailed("Connected channel does not match upload destination");
    String metadata=json.writeValueAsString(Map.of(
-     "snippet",Map.of("title",title,"categoryId","22"),
+     "snippet",Map.of("title",title,"description",description,"categoryId","22"),
      "status",Map.of("privacyStatus","private")));
    ResponseEntity<String> session=client.post().uri(START)
      .headers(h-> {
