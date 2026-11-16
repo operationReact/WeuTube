@@ -20,15 +20,38 @@ Current path: Flutter mobile/web -> one authenticated multipart HTTP request -> 
 4. Add backend and Flutter tests for Unicode, UTF-8 byte limits, accepted formats and capacity distinction.
 5. Preserve private upload/administrator-grant protections and never bypass real channel authorization.
 
-## Phase 2 — durable resumable ingress; required for 256 GB parity
-Implement *before* removing 256 MiB cap:
-- A server-owned upload session: `POST /api/creator/uploads` returns opaque upload ID with owner/authorized-channel linkage, size, expected content type, expected duration and checksum. Idempotent; no Google credentials go to client.
-- Chunked/direct-to-durable-storage ingress (S3 multipart via scoped presigned part URLs, 8-64 MiB parts with no leaked credentials). S3 supports multipart uploads beyond 256 GB; encrypted object with TTL and per-creator quotas. Ensure bucket lifecycle cleanup for abandoned multipart data.
-- Validate size/duration, MIME sniffing/container metadata with bounded ffprobe; detect unsupported codecs, empty files and suspicious files. Use YouTube `status.longUploadsStatus` on OAuth-connected authorized channel for 15min restrictions. Never use filename extension alone as security proof.
-- A durable queue/worker with idempotent DB state transitions; stream from S3 to Google resumable session (Content-Range, 308 support, ranged retry, backoff) and persist upload-session state/bytes/checkpoints securely. Do not mark success until YouTube responds with verified video ID, private status and expected channel.
-- Show distinct **device-to-storage**, **storage-to-YouTube**, **YouTube processing**, and **WeuTube review** states. Persist progress across app restarts; support pause/resume/cancel/retry without duplicate uploads.
-- Cap concurrent uploads and enforce per-account bandwidth/storage quotas to avoid unexpected AWS charges. Confirm daily provider quota and user/channel upload limits with YouTube API rather than inventing a single universal number.
-- Add integration tests for 256 MB boundary, 1+ GB simulation, network cut, chunk mismatch, expired session, server restart, duplicate completion and cleanup. Measure 4K/long-video performance on Android and web.
+## Phase 2 — YouTube-native resumable uploads, NO S3 (corrected 2026-11-16)
+
+**Decision:** YouTube alone stores full videos. WeuTube does not maintain a second 256 GB copy in S3 or on EC2. This explicitly supersedes the earlier S3 staging proposal.
+
+**Why a small server relay is still required for the current shared-channel model:** Google's documented resumable session creation AND subsequent upload PUT requests require a Google OAuth bearer token. The connected YouTube channel belongs to the WeuTube operator and is grant-controlled. Exposing that channel's access/refresh token to a member's Flutter client would let that member act as the channel outside WeuTube's access checks.
+
+Flow:
+
+```text
+Flutter (original video stays on phone/desktop)
+  → authenticated WeuTube HTTPS API: 8 MiB chunk + opaque session ID
+  → bounded in-memory/streaming server relay (no full-file disk staging)
+  → Google/YouTube resumable session; 308 Range = authoritative received bytes
+  → YouTube alone stores/processes video, returns verified ID
+PostgreSQL stores only upload progress/ownership/session metadata
+```
+
+A different *creator-owned YouTube channel* product could use OAuth PKCE/user-delegated Google tokens and upload straight from the client to YouTube (official JavaScript API CORS sample). That is not safe to substitute for the existing administrator-controlled shared channel without changing consent, grants and ownership.
+
+Implement before raising the current 256 MiB direct uploader limit:
+
+1. **Authenticated sessions.** API creates an opaque session ID tied to one draft and creator identity. Validate existing admin grant and OAuth-connected channel at creation and every chunk, file name/media type, title/description, size <=256 GB, eligible long-upload status, fixed chunk size and per-account quotas. Initiate Google's resumable session on the server. Store the Google session URI privately in PostgreSQL; **never** return it or Google bearer tokens to clients.
+2. **Small streaming relay.** Each chunk is <=8 MiB (multiple of 256 KiB; final part may be smaller). Stream the incoming HTTP request directly into a Google `PUT` while preserving Content-Range and bounded memory/temporary buffers. No S3 uploads, no 256 GB EC2 disk staging. Limit concurrent chunk requests to avoid 40 GB root-disk pressure and resource exhaustion.
+3. **Checkpoint + reconciliation.** Persist the Google-confirmed offset from HTTP 308 `Range`, never the number of bytes the phone merely sent. After a dropped connection, timeout or server restart, query Google via `PUT` with `Content-Range: bytes */TOTAL` to recover its true offset. Do not create another video or repeat a non-idempotent request blindly. Respect backoff and expired session policies.
+4. **Flutter.** Read the original local video in seekable 8 MiB slices without buffering the full file. Persist the opaque WeuTube session ID, Google-confirmed offset and file fingerprint; on app restart ask the user to reselect the same original file when Android/browser file permissions expire. Offer pause, resume, cancel, retry and accurate transfer percentage. If upload is paused, it cannot continue with the device offline unless some other holder possesses the original bytes.
+5. **Completion + processing.** On successful Google response, verify returned YouTube video ID, expected channel and private status before transitioning to PRIVATE_REVIEW. Display separate "Sending to YouTube", "Processing on YouTube", and "WeuTube review" stages.
+6. **Safety + cost.** No S3 video storage, but EC2 relaying still has network and compute cost. Never promise zero bandwidth cost. Rate-limit uploads, bound concurrent sessions, expire abandoned sessions, verify MIME/container and duration/long-video privilege. YouTube API quotas/channel rules still apply.
+7. **Tests.** 308 zero/nonzero Range, invalid/off-by-one ranges, concurrent chunks, 256 GB arithmetic, auth revocation, expired URI, reconnect after app/server restart, 5xx handling, partial response, duplicate completion, large-file client I/O, real authorized channel smoke. Do not enable the new 256 GB path until integration tests pass and the operator approves resource limits.
+
+**No background video-storage worker is required for the streaming approach.** A small status/reconciliation job may still be useful. Google cannot complete an upload if the app stops transferring and no other source holds the bytes.
+
+Official protocol: https://developers.google.com/youtube/data/guides/using_resumable_upload_protocol
 
 ## Phase 3 — full YouTube upload-feature compliance
 - Add a creator-controlled final visibility choice (public/private/unlisted) and keep a separate WeuTube approval state; design YouTube privacy transitions so creators are never told a private video is public. Currently WeuTube requires private initial uploads and admin-approved public release, which must be redesigned against YouTube Required Minimum Functionality.
