@@ -136,6 +136,10 @@ jobs:
                      (.items | any(.creator == "Diya Nair")) and
                      (.items | all(.demo != true or (.avatarUrl != null and .videoUrl != null)))' >/dev/null
           echo "Verified the new twelve-creator demo feed alongside actual published video support"
+          # Published-video comments are public; mutations still require Cognito.
+          curl --silent --show-error --max-time 12 -o /dev/null -w '%{http_code}' \
+            'https://api.weutube.com/api/social/videos/00000000-0000-0000-0000-000000000000/comments' \
+            | grep -qx '404'
       - name: Publish verified deployment details
         run: |
           {
@@ -144,5 +148,5 @@ jobs:
             echo "Website: https://weutube.com/"
             echo "Elastic IP: $API_EIP"
             echo "Google OAuth redirect: https://api.weutube.com/api/admin/youtube/callback"
-            echo "Immersive social app deployed with 12 explicitly labelled fictional creators; real engagements are backed by authenticated APIs."
+            echo "Immersive social v2, native sharing, guest-readable comments and twelve labelled demo creators deployed; real engagement remains authenticated."
           } >> "$GITHUB_STEP_SUMMARY"
