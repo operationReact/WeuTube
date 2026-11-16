@@ -471,7 +471,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
             child: Text(c['displayName']?.toString() ??
               c['channelId'].toString(),
               overflow: TextOverflow.ellipsis))).toList(),
-          onChanged: _sending || _uploadAttempted ? null :
+          onChanged: _sending || _sessionId!=null ? null :
             (value) => setState(() => _channel = value)),
         const SizedBox(height: 16),
         _info('YouTube accepts videos up to 256 GB or 12 hours on eligible '
