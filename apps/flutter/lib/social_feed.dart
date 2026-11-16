@@ -582,6 +582,44 @@ class _SocialHubState extends State<SocialHub> {
     ]);
   }
 
+  Widget exploreTile(Map<String,dynamic> item,int index) {
+    final height=index.isEven?218.0:174.0;
+    return Padding(padding:const EdgeInsets.only(bottom:10),
+      child:InkWell(onTap:()=>play(item),
+        borderRadius:BorderRadius.circular(16),
+        child:SizedBox(height:height,
+          child:ClipRRect(borderRadius:BorderRadius.circular(16),
+            child:Stack(fit:StackFit.expand,children:[
+              Image.network(image(item),fit:BoxFit.cover,
+                errorBuilder:(_,__,___)=>const ColoredBox(color:navy,
+                  child:Icon(Icons.play_circle_outline,
+                    color:Colors.white,size:50))),
+              const DecoratedBox(decoration:BoxDecoration(
+                gradient:LinearGradient(begin:Alignment.topCenter,
+                  end:Alignment.bottomCenter,
+                  colors:[Colors.transparent,Color(0xD9000000)]))),
+              Positioned(left:11,right:9,bottom:12,
+                child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  if(isDemo(item))
+                    const Text('DEMO',style:TextStyle(
+                      color:Color(0xFFFFC5B9),fontSize:9,
+                      fontWeight:FontWeight.w900,letterSpacing:.9)),
+                  const SizedBox(height:4),
+                  Text(str(item['title']),maxLines:2,
+                    overflow:TextOverflow.ellipsis,
+                    style:const TextStyle(color:Colors.white,
+                      fontSize:14,fontWeight:FontWeight.w900,height:1.12)),
+                  const SizedBox(height:5),
+                  Text(str(item['creator']),maxLines:1,
+                    overflow:TextOverflow.ellipsis,
+                    style:const TextStyle(color:Colors.white70,fontSize:10))
+                ])),
+              const Positioned(right:8,top:9,
+                child:Icon(Icons.play_circle_fill_rounded,
+                  color:Colors.white,size:29))
+            ])))));
+  }
+
   Widget explore() {
     final term=search.text.trim().toLowerCase();
     final filtered=items.where((item)=>
@@ -589,62 +627,109 @@ class _SocialHubState extends State<SocialHub> {
       (term.isEmpty||[
         item['title'],item['description'],item['category'],item['creator']
       ].any((value)=>str(value).toLowerCase().contains(term)))).toList();
-    return ListView(padding:const EdgeInsets.fromLTRB(17,19,17,28),children:[
-      const Text('Explore your world',style:TextStyle(
-        fontSize:26,fontWeight:FontWeight.w900,color:navy)),
-      const SizedBox(height:6),
-      const Text('Curiosity looks good on you.',style:TextStyle(color:slate)),
-      const SizedBox(height:18),
+    final distinct=<String>{};
+    final creators=items.where((p)=>distinct.add(followKey(p))).take(8).toList();
+    return ListView(padding:const EdgeInsets.fromLTRB(15,12,15,28),children:[
+      const Text('Explore',style:TextStyle(
+        fontSize:28,fontWeight:FontWeight.w900,color:navy)),
+      const SizedBox(height:5),
+      const Text('People, passions and places worth finding.',
+        style:TextStyle(color:slate,fontSize:13)),
+      const SizedBox(height:15),
       TextField(controller:search,onChanged:(_)=>setState((){}),
         decoration:InputDecoration(
           prefixIcon:const Icon(Icons.search_rounded,color:navy),
-          hintText:'Creators, videos, topics…',
+          hintText:'Search creators, videos or topics',
+          hintStyle:const TextStyle(color:slate,fontSize:13),
+          contentPadding:const EdgeInsets.symmetric(vertical:14),
           fillColor:Colors.white,filled:true,
-          border:OutlineInputBorder(borderRadius:BorderRadius.circular(16)))),
+          enabledBorder:OutlineInputBorder(
+            borderRadius:BorderRadius.circular(15),
+            borderSide:const BorderSide(color:Color(0xFFE8EBF1))),
+          focusedBorder:OutlineInputBorder(
+            borderRadius:BorderRadius.circular(15),
+            borderSide:const BorderSide(color:coral,width:1.5)))),
       const SizedBox(height:14),
       SingleChildScrollView(scrollDirection:Axis.horizontal,
         child:Row(children:[
-          for(final t in ['All','Travel','Art','Lifestyle','Storytelling','Stories'])
+          for(final t in ['All','Travel','Food','Art','Lifestyle','Technology',
+            'Nature','Music','Storytelling','Education'])
             Padding(padding:const EdgeInsets.only(right:7),
               child:ChoiceChip(label:Text(t),selected:category==t,
-                selectedColor:coral.withValues(alpha:.15),
+                showCheckmark:false,
+                backgroundColor:Colors.white,
+                selectedColor:coral.withValues(alpha:.12),
+                side:BorderSide(color:category==t?coral.withValues(alpha:.3):
+                  const Color(0xFFE6E9EF)),
+                labelStyle:TextStyle(fontWeight:FontWeight.w700,
+                  color:category==t?coral:navy,fontSize:12),
                 onSelected:(_)=>setState(()=>category=t)))
         ])),
-      sectionTitle('Trending discoveries'),
-      if(filtered.isEmpty)const Padding(padding:EdgeInsets.symmetric(vertical:25),
-        child:Text('Nothing matches this search. Try another topic.',
-          style:TextStyle(color:slate))),
-      for(final item in filtered)
-        Padding(padding:const EdgeInsets.only(bottom:10),
-          child:InkWell(onTap:()=>play(item),
-            borderRadius:BorderRadius.circular(17),
-            child:card(Row(children:[
-              SizedBox(width:113,height:96,child:thumbnail(item)),
-              const SizedBox(width:12),
-              Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
-                children:[
-                  Text(str(item['title']),maxLines:2,overflow:TextOverflow.ellipsis,
-                    style:const TextStyle(color:navy,fontWeight:FontWeight.w800)),
+      const SizedBox(height:13),
+      if(term.isEmpty&&category=='All'&&items.isNotEmpty)
+        InkWell(onTap:()=>play(items.first),child:ClipRRect(
+          borderRadius:BorderRadius.circular(20),
+          child:SizedBox(height:150,child:Stack(fit:StackFit.expand,children:[
+            Image.network(image(items.first),fit:BoxFit.cover,
+              errorBuilder:(_,__,___)=>const ColoredBox(color:navy)),
+            const DecoratedBox(decoration:BoxDecoration(
+              gradient:LinearGradient(begin:Alignment.centerLeft,
+                end:Alignment.centerRight,
+                colors:[Color(0xD9031B4B),Colors.transparent]))),
+            const Positioned(left:18,top:18,right:70,
+              child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Text('SPOTLIGHT',style:TextStyle(
+                  color:Color(0xFFFFB2A4),fontWeight:FontWeight.w900,
+                  fontSize:10,letterSpacing:1)),
+                SizedBox(height:9),
+                Text('Discover something\nunexpected.',style:TextStyle(
+                  color:Colors.white,fontWeight:FontWeight.w900,
+                  fontSize:22,height:1.12)),
+                SizedBox(height:6),
+                Text('Curated preview stories',
+                  style:TextStyle(color:Colors.white70,fontSize:11))
+              ])),
+            const Positioned(right:18,bottom:18,child:Icon(
+              Icons.play_circle_fill_rounded,color:Colors.white,size:45))
+          ])))),
+      sectionTitle('Meet the creators',
+        trailing:'See stories',onTap:()=>widget.onNavigate('Home')),
+      SizedBox(height:100,child:ListView(scrollDirection:Axis.horizontal,
+        children:[
+          for(final creator in creators)
+            Padding(padding:const EdgeInsets.only(right:15),
+              child:InkWell(onTap:()=>follow(creator),
+                child:Column(children:[
+                  CreatorPortrait(name:str(creator['creator']),
+                    imageUrl:avatar(creator),radius:27,highlighted:true),
                   const SizedBox(height:5),
-                  Text(str(item['category'])+' · '+str(item['creator']),
-                    style:const TextStyle(color:slate,fontSize:11)),
-                  const SizedBox(height:7),
-                  pill(isDemo(item)?'SAMPLE':'PUBLISHED',
-                    isDemo(item)?coral:success)
-                ]))
-            ]),pad:const EdgeInsets.all(10)))),
-      sectionTitle('Creators to know'),
-      card(Column(children:[
-        for(final item in items.take(3))
-          ListTile(contentPadding:EdgeInsets.zero,
-            leading:CircleAvatar(backgroundColor:coral.withValues(alpha:.12),
-              child:const Icon(Icons.person,color:coral)),
-            title:Text(str(item['creator']),style:const TextStyle(
-              fontWeight:FontWeight.w800,color:navy)),
-            subtitle:Text(str(item['category'])+' stories',
-              style:const TextStyle(fontSize:11)),
-            trailing:TextButton(onPressed:()=>follow(item),child:const Text('Follow')))
-      ]))
+                  SizedBox(width:66,child:Text(
+                    str(creator['creator']).split(' ').first,
+                    maxLines:1,overflow:TextOverflow.ellipsis,
+                    textAlign:TextAlign.center,style:const TextStyle(
+                      color:navy,fontWeight:FontWeight.w700,fontSize:11))),
+                  Text(following.contains(followKey(creator))?'Following':'+ Follow',
+                    style:const TextStyle(color:coral,
+                      fontWeight:FontWeight.w800,fontSize:10))
+                ])))
+        ])),
+      sectionTitle('For your curiosity'),
+      if(filtered.isEmpty)const Padding(
+        padding:EdgeInsets.symmetric(vertical:30),
+        child:Text('Nothing matches yet. Try another topic.',
+          style:TextStyle(color:slate))),
+      Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Expanded(child:Column(children:[
+          for(var i=0;i<filtered.length;i+=2)exploreTile(filtered[i],i)
+        ])),
+        const SizedBox(width:10),
+        Expanded(child:Column(children:[
+          for(var i=1;i<filtered.length;i+=2)exploreTile(filtered[i],i)
+        ]))
+      ]),
+      const SizedBox(height:12),
+      const Center(child:Text('Demo content is labeled. Real creator posts appear after approval.',
+        style:TextStyle(color:slate,fontSize:10)))
     ]);
   }
 
