@@ -67,8 +67,19 @@ class WeuTubeApi {
     }
     final status = response.statusCode;
     if(status < 200 || status >= 300) {
-      if(status==401) throw const ApiFailure('Invalid credentials or session.',401);
-      if(status==403) throw const ApiFailure('Access denied.',403);
+      if(status==401) throw const ApiFailure(
+        'Your Cognito session is invalid or expired. Sign in again.',401);
+      if(status==403) {
+        final kind=response.headers['x-weutube-auth-status'];
+        if(kind=='AUTHORIZATION_DENIED') {
+          throw const ApiFailure(
+            'You are signed in, but the server denied access to this '
+            'specific operation (HTTP 403).',403);
+        }
+        throw const ApiFailure(
+          'The API returned HTTP 403 without confirming that your token '
+          'was accepted. This needs backend authentication diagnosis.',403);
+      }
       if(status==404) throw const ApiFailure('Account or requested item not found.',404);
       if(status==409) throw const ApiFailure('Action conflicts with the current status.',409);
       if(status==412 || status==428) throw ApiFailure('Verified private video required.',status);
