@@ -22,15 +22,16 @@ void main() {
     await tester.pumpWidget(const WeuTubeApp());
     await tester.tap(find.text('Explore').first);
     await tester.pump();
-    expect(find.text('People, passions and places worth finding.'), findsOneWidget);
-    expect(find.text('Search creators, videos or topics'), findsOneWidget);
+    expect(find.text('Discover videos and creators.'), findsOneWidget);
+    expect(find.text('Search videos, creators or topics'), findsOneWidget);
+    expect(find.byTooltip('Search creators and videos'), findsNothing);
   });
 
   testWidgets('Sign-in is available when a person wants to create', (tester) async {
     await tester.pumpWidget(const WeuTubeApp());
     await tester.tap(find.text('Create').last);
     await tester.pump();
-    expect(find.text('Create something great.'), findsOneWidget);
+    expect(find.text('Share a video with the WeuTube community.'), findsOneWidget);
     await tester.ensureVisible(find.text('Sign in to upload'));
     await tester.pump();
     await tester.tap(find.text('Sign in to upload'));
@@ -111,6 +112,36 @@ void main() {
     await tester.tap(submit);
     await tester.pump();
     expect(find.text('Passwords do not match'), findsOneWidget);
+  });
+
+  testWidgets('You tab is a concise account page without demo statistics',
+      (tester) async {
+    await tester.pumpWidget(const WeuTubeApp());
+    await tester.tap(find.text('You').last);
+    await tester.pump();
+    expect(find.text('Welcome to WeuTube'), findsOneWidget);
+    expect(find.text('Your collection'), findsOneWidget);
+    expect(find.text('Saved videos'), findsOneWidget);
+    expect(find.text('Sign In / Create Account'), findsOneWidget);
+    expect(find.text('Creator tools'), findsNothing);
+    expect(find.text('Guest'), findsNothing);
+  });
+
+  testWidgets('Explore search and empty-state remain useful at 320dp',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const WeuTubeApp());
+    expect(tester.takeException(), isNull,
+      reason: 'Home must not overflow before navigating to Explore');
+    await tester.tap(find.text('Explore').last);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    await tester.enterText(find.byType(TextField).first, '___no_matching_video___');
+    await tester.pump();
+    expect(find.text('No matches found'), findsOneWidget);
+    expect(find.byTooltip('Clear search'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
 }
