@@ -138,7 +138,7 @@ jobs:
           echo "Verified the new twelve-creator demo feed alongside actual published video support"
           # Published-video comments are public; mutations still require Cognito.
           curl --silent --show-error --max-time 12 -o /dev/null -w '%{http_code}' \
-            'https://api.weutube.com/api/social/videos/00000000-0000-0000-0000-000000000000/comments' \
+            'https://api.weutube.com/api/public/social/videos/00000000-0000-0000-0000-000000000000/comments' \
             | grep -qx '404'
       - name: Publish verified deployment details
         run: |
