@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -74,7 +75,10 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
       // Never continue YouTube audio or playback behind other screens.
-      _controller?.pauseVideo();
+      final controller = _controller;
+      if (controller != null && controller.value.isReady) {
+        unawaited(controller.pauseVideo().catchError((Object _) {}));
+      }
     }
     // Do not force a paused or unmuted video to restart on app resume.
   }
@@ -82,8 +86,12 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
   void _configurePlayer() {
     final previous = _controller;
     _controller = null;
-    previous?.pauseVideo();
-    previous?.close();
+    if (previous != null) {
+      if (previous.value.isReady) {
+        unawaited(previous.pauseVideo().catchError((Object _) {}));
+      }
+      unawaited(previous.close().catchError((Object _) {}));
+    }
     _error = null;
     if (!widget.active) return;
 
@@ -111,6 +119,8 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
         await controller.loadVideoById(videoId: widget.videoId);
       } catch (_) {
         if (mounted && identical(controller, _controller)) {
+          _controller = null;
+          unawaited(controller.close().catchError((Object _) {}));
           setState(() => _error =
               'Embedded playback unavailable. Open on YouTube below.');
         }
@@ -121,14 +131,26 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.pauseVideo();
-    _controller?.close();
+    final controller = _controller;
+    if (controller != null) {
+      if (controller.value.isReady) {
+        unawaited(controller.pauseVideo().catchError((Object _) {}));
+      }
+      unawaited(controller.close().catchError((Object _) {}));
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
+    if (_error != null) {
+      return ColoredBox(color: navy,
+        child: Center(child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(_error!, textAlign: TextAlign.center,
+            style: const TextStyle(color: coral, fontSize: 12)))));
+    }
     if (!widget.active || controller == null) {
       return Stack(fit: StackFit.expand, children: [
         ColoredBox(color: navy, child: Image.network(
@@ -141,13 +163,6 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
       ]);
     }
 
-    if (_error != null) {
-      return ColoredBox(color: navy,
-        child: Center(child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text(_error!, textAlign: TextAlign.center,
-            style: const TextStyle(color: coral, fontSize: 12)))));
-    }
     // This is the unmodified YouTube embedded player. No overlays, custom
     // tap handlers, frames or decorative masks are placed on its surface.
     // Match the parent viewport so even narrow mobile cards remain >=200px
