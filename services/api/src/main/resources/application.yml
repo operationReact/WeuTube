@@ -7,6 +7,11 @@ spring:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/weutube}
     username: ${DATABASE_USERNAME:weutube}
     password: ${DATABASE_PASSWORD:}
+  servlet:
+    multipart:
+      max-file-size: 256MB
+      max-request-size: 260MB
+      file-size-threshold: 0
   jpa:
     hibernate:
       ddl-auto: validate
