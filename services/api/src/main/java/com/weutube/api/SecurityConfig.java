@@ -5,6 +5,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -22,7 +25,8 @@ public class SecurityConfig {
   source.registerCorsConfiguration("/api/**",cors);
   return source;
  }
- @Bean SecurityFilterChain security(HttpSecurity http) throws Exception {
+ @Bean SecurityFilterChain security(HttpSecurity http,
+  @Value("${weutube.cognito.client-id:}") String expectedClientId) throws Exception {
   return http.cors(org.springframework.security.config.Customizer.withDefaults())
    .csrf(csrf -> csrf.disable())
    .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -31,6 +35,13 @@ public class SecurityConfig {
      .requestMatchers(HttpMethod.GET,"/api/admin/youtube/callback").permitAll()
      .requestMatchers(HttpMethod.OPTIONS,"/**").permitAll()
      .anyRequest().authenticated())
-   .oauth2ResourceServer(o -> o.jwt(j -> {})).build();
+   .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(token -> {
+      if (!"access".equals(token.getClaimAsString("token_use")))
+       throw new BadCredentialsException("Cognito access token required");
+      if(!expectedClientId.isBlank()
+        && !expectedClientId.equals(token.getClaimAsString("client_id")))
+       throw new BadCredentialsException("Token is for a different app client");
+      return new JwtAuthenticationToken(token);
+    }))).build();
  }
 }
