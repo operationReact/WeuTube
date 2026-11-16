@@ -6,8 +6,8 @@ void main() {
   testWidgets('opens social Home directly with a populated feed', (tester) async {
     await tester.pumpWidget(const WeuTubeApp());
     expect(find.byType(WeuTubeBrand), findsOneWidget);
-    expect(find.text('Find your next spark.'), findsOneWidget);
-    expect(find.text('Fresh from the community'), findsOneWidget);
+    expect(find.text('Creators worth discovering'), findsOneWidget);
+    expect(find.text('For you'), findsOneWidget);
     expect(find.text('Home'), findsWidgets);
     expect(find.text('Explore'), findsWidgets);
     expect(find.text('Shorts'), findsWidgets);
