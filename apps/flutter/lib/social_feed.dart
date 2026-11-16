@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
@@ -6,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'backend_client.dart';
 import 'social_demo_data.dart';
 import 'social_design_widgets.dart';
+import 'youtube_embed.dart';
 import 'product_ui.dart' show navy, coral, soft, slate;
 
 /// A filled, mobile-first social experience. Public demo content is explicitly
@@ -46,6 +48,7 @@ class _SocialHubState extends State<SocialHub> {
   int shortIndex = 0;
   int homeIndex = 0;
   bool showQuickHeart = false;
+  bool playerSheetOpen = false;
 
   @override
   void initState() {
@@ -239,23 +242,63 @@ class _SocialHubState extends State<SocialHub> {
       }).whenComplete(input.dispose);
   }
 
+  Future<void> openOnYouTube(Map<String,dynamic> item) async {
+    final raw = str(item['youtubeUrl']);
+    if (youtubeVideoIdFromUrl(raw) == null) {
+      inform('This video has no verified YouTube link.');
+      return;
+    }
+    if (!await launchUrl(Uri.parse(raw), mode: LaunchMode.externalApplication)) {
+      inform('Could not open YouTube on this device.');
+    }
+  }
+
   Future<void> play(Map<String,dynamic> item) async {
-    if(isDemo(item)) {
+    if (isDemo(item)) {
       final url = str(item['videoUrl']);
-      if(url.isEmpty) {inform('Sample clip unavailable.');return;}
-      await showModalBottomSheet<void>(context:context,isScrollControlled:true,
-        backgroundColor:const Color(0xFF08132E),useSafeArea:true,
-        builder:(_) => DemoVideoPlayer(url:url,title:str(item['title'])));
-    } else {
-      final raw = str(item['youtubeUrl']);
-      final uri = Uri.tryParse(raw);
-      if(uri == null || uri.scheme != 'https' ||
-          !['www.youtube.com','youtube.com'].contains(uri.host)) {
-        inform('This video does not have a verified playback link.');return;
-      }
-      if(!await launchUrl(uri,mode:LaunchMode.externalApplication)) {
-        inform('Unable to open the published video.');
-      }
+      if (url.isEmpty) { inform('Sample clip unavailable.'); return; }
+      await showModalBottomSheet<void>(
+        context: context, isScrollControlled: true,
+        backgroundColor: const Color(0xFF08132E), useSafeArea: true,
+        builder: (_) => DemoVideoPlayer(url: url, title: str(item['title'])));
+      return;
+    }
+    final videoId = youtubeVideoIdFromUrl(str(item['youtubeUrl']));
+    if (videoId == null) {
+      inform('This video does not have a verified playback link.');
+      return;
+    }
+    // Suppress the feed player before mounting the modal's player. There
+    // must never be two simultaneous embedded YouTube autoplay sessions.
+    setState(() => playerSheetOpen = true);
+    try {
+      await showModalBottomSheet<void>(context: context,
+        isScrollControlled: true, useSafeArea: true,
+        backgroundColor: const Color(0xFF0A1631),
+        builder: (sheetContext) => SafeArea(child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 15, 14, 20),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Row(children: [
+              Expanded(child: Text(str(item['title']), maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white,
+                  fontWeight: FontWeight.w800, fontSize: 16))),
+              IconButton(onPressed: () => Navigator.pop(sheetContext),
+                icon: const Icon(Icons.close_rounded, color: Colors.white)),
+            ]),
+            const SizedBox(height: 12),
+            SizedBox(height: math.max(200.0,
+                (MediaQuery.sizeOf(sheetContext).width - 28) * 9 / 16),
+              child: WeuTubeYoutubeStage(
+                videoId: videoId, thumbnailUrl: image(item), active: true)),
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: () => openOnYouTube(item),
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: const Text('Open on YouTube')),
+          ]))));
+    } finally {
+      if (mounted) setState(() => playerSheetOpen = false);
     }
   }
 
@@ -281,9 +324,127 @@ class _SocialHubState extends State<SocialHub> {
               fontWeight:FontWeight.w600,fontSize:12))]
         ])));
 
+
+  /// Published videos keep the same immersive navy card, but WeuTube
+  /// overlays and social actions are completely OUTSIDE the YouTube iframe.
+  /// YouTube branding, ads and controls must remain visible and tappable.
+  Widget publishedImmersivePost(Map<String,dynamic> item, int index,
+      {bool shorts = false}) {
+    final key = id(item);
+    final ytId = youtubeVideoIdFromUrl(str(item['youtubeUrl']));
+    final playing = !playerSheetOpen &&
+        (shorts ? (widget.section == 'Shorts' && index == shortIndex)
+                : (widget.section == 'Home' && index == homeIndex));
+    final followed = following.contains(followKey(item));
+    final isLiked = liked.contains(key);
+    final isSaved = saved.contains(key);
+
+    Widget action(IconData icon, String label, VoidCallback callback,
+        {bool selected = false}) => Expanded(child: InkWell(
+      onTap: callback,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 22, color: selected ? coral : Colors.white),
+          const SizedBox(height: 4),
+          Text(label, overflow: TextOverflow.ellipsis, maxLines: 1,
+            style: const TextStyle(color: Colors.white70,
+              fontSize: 10, fontWeight: FontWeight.w700))
+        ]))));
+
+    final footer = Padding(
+      padding: const EdgeInsets.fromLTRB(13, 12, 13, 8),
+      child: Column(mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          CreatorPortrait(name: str(item['creator']),
+            imageUrl: avatar(item), radius: 17, highlighted: false),
+          const SizedBox(width: 9),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(str(item['creator']), maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white,
+                  fontWeight: FontWeight.w800, fontSize: 13)),
+              Text(str(item['handle']), maxLines: 1,
+                style: const TextStyle(color: Colors.white60, fontSize: 10))
+            ])),
+          const Text('PUBLISHED', style: TextStyle(color: Colors.white70,
+            fontSize: 9, letterSpacing: 1, fontWeight: FontWeight.w800)),
+        ]),
+        const SizedBox(height: 8),
+        Text(str(item['title']), maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Colors.white, fontSize: 18,
+            fontWeight: FontWeight.w900, height: 1.13)),
+        if (str(item['description']).trim().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(str(item['description']), maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white70, fontSize: 11))
+        ],
+        const SizedBox(height: 6),
+        Row(children: [
+          action(followed ? Icons.person_rounded : Icons.person_add_alt_1_rounded,
+            followed ? 'Following' : 'Follow', () => follow(item),
+            selected: followed),
+          action(isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            'Like', () => like(item), selected: isLiked),
+          action(Icons.mode_comment_outlined, 'Comments',
+            () => openComments(item)),
+          action(isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+            'Save', () => save(item), selected: isSaved),
+          action(Icons.share_rounded, 'Share', () => share(item))
+        ]),
+        Row(children: [
+          const Icon(Icons.play_circle_outline_rounded,
+            size: 14, color: Colors.white70),
+          const SizedBox(width: 5),
+          const Expanded(child: Text('Video hosted by YouTube',
+            style: TextStyle(color: Colors.white60, fontSize: 10))),
+          TextButton(
+            onPressed: () => openOnYouTube(item),
+            child: const Text('Open on YouTube',
+              style: TextStyle(color: Colors.white, fontSize: 11)))
+        ]),
+      ]),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(9, 3, 9, 6),
+      // A dark rounded card remains; do not clip the YouTube iframe's corners.
+      // Even minor masks on the official player are prohibited.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A1631),
+          borderRadius: BorderRadius.circular(22)),
+        child: LayoutBuilder(builder: (context, bounds) {
+            final videoHeight = math.max(200.0,
+                math.min(350.0, bounds.maxWidth * 9 / 16));
+            final enoughRoom = bounds.maxHeight >= videoHeight + 235;
+            return Column(children: [
+              SizedBox(width: double.infinity, height: videoHeight,
+                child: ytId == null
+                  ? Center(child: TextButton.icon(
+                      onPressed: () => openOnYouTube(item),
+                      icon: const Icon(Icons.error_outline_rounded),
+                      label: const Text('YouTube video unavailable')))
+                  : WeuTubeYoutubeStage(
+                      key: ValueKey('yt-${shorts ? 'shorts' : 'home'}-$key'),
+                      videoId: ytId,
+                      thumbnailUrl: image(item),
+                      active: playing)),
+              Expanded(child: enoughRoom
+                ? Align(alignment: Alignment.bottomCenter, child: footer)
+                : SingleChildScrollView(child: footer))
+            ]);
+          })));
+  }
+
   /// Video-first, full-height card: content takes the screen instead of
   /// being buried under repetitive white Flutter dashboard containers.
   Widget immersivePost(Map<String,dynamic> item,int index) {
+    if (!isDemo(item)) return publishedImmersivePost(item, index);
     final key=id(item),followed=following.contains(followKey(item));
     return Padding(padding:const EdgeInsets.fromLTRB(9,3,9,6),
       child:ClipRRect(borderRadius:BorderRadius.circular(22),
@@ -292,7 +453,7 @@ class _SocialHubState extends State<SocialHub> {
             key:ValueKey('home-media-$key'),
             thumbnailUrl:image(item),
             previewUrl:isDemo(item)?str(item['videoUrl']):null,
-            active:widget.section=='Home'&&index==homeIndex,
+            active:!playerSheetOpen&&widget.section=='Home'&&index==homeIndex,
             immersive:true,
             onTap:()=>play(item),
             onDoubleTap:()=>doubleTapLike(item)),
@@ -720,12 +881,15 @@ class _SocialHubState extends State<SocialHub> {
       itemCount:items.length,
       itemBuilder:(context,index) {
         final post=items[index],key=id(post);
+        if (!isDemo(post)) {
+          return publishedImmersivePost(post, index, shorts: true);
+        }
         return Stack(fit:StackFit.expand,children:[
           SocialMediaStage(
             key:ValueKey('shorts-media-$key'),
             thumbnailUrl:image(post),
             previewUrl:isDemo(post)?str(post['videoUrl']):null,
-            active:widget.section=='Shorts'&&shortIndex==index,
+            active:!playerSheetOpen&&widget.section=='Shorts'&&shortIndex==index,
             immersive:true,
             onTap:()=>play(post),
             onDoubleTap:()=>doubleTapLike(post)),

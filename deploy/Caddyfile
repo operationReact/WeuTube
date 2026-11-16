@@ -11,7 +11,9 @@
     encode zstd gzip
     header {
         X-Content-Type-Options "nosniff"
-        Referrer-Policy "no-referrer"
+        # Embedded YouTube players require a valid origin for client identity.
+        # Suppressing Referer entirely causes embedded-player error 153.
+        Referrer-Policy "strict-origin-when-cross-origin"
     }
     reverse_proxy web:80
 }
