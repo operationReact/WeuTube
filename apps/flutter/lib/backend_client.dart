@@ -127,6 +127,11 @@ class WeuTubeApi {
     asMap(await call('GET','/api/creator/videos/'+Uri.encodeComponent(id)));
   Future<Map<String,dynamic>> createDraft(String title) async =>
     asMap(await call('POST','/api/creator/videos/drafts',data:{'title':title}));
+  Future<Map<String,dynamic>> updateDraftMetadata(String id,String title,
+      String description,String category) async =>
+    asMap(await call('PATCH','/api/creator/videos/drafts/'+
+      Uri.encodeComponent(id)+'/metadata',
+      data:{'title':title,'description':description,'category':category}));
   Future<Map<String,dynamic>> renameDraft(String id,String title) async =>
     asMap(await call('PATCH','/api/creator/videos/drafts/'+Uri.encodeComponent(id),data:{'title':title}));
   Future<void> deleteDraft(String id) async =>
