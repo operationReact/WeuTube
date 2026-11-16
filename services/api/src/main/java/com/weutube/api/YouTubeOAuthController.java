@@ -74,7 +74,7 @@ public class YouTubeOAuthController {
    UUID.randomUUID(),state,jwt.getSubject(),expires);
   String url="https://accounts.google.com/o/oauth2/v2/auth?client_id="+enc(clientId)
     +"&redirect_uri="+enc(redirectUri)
-    +"&response_type=code&scope="+enc("https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly")
+    +"&response_type=code&scope="+enc("https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl")
     +"&access_type=offline&prompt=consent&state="+enc(state);
   return new AuthorizationUrl(url,expires);
  }
