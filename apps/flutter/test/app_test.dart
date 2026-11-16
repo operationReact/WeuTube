@@ -6,7 +6,10 @@ void main() {
   testWidgets('opens social Home directly with a populated feed', (tester) async {
     await tester.pumpWidget(const WeuTubeApp());
     expect(find.byType(WeuTubeBrand), findsOneWidget);
-    expect(find.text('Creators worth discovering'), findsOneWidget);
+    expect(find.text('Discover creators'), findsOneWidget);
+    expect(find.byTooltip('Search creators and videos'), findsOneWidget);
+    expect(find.text('Your video'), findsNothing);
+    expect(find.text('Latest'), findsOneWidget);
     expect(find.text('For you'), findsOneWidget);
     expect(find.text('Home'), findsWidgets);
     expect(find.text('Explore'), findsWidgets);
@@ -38,4 +41,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Full Name'), findsOneWidget);
   });
+  testWidgets('Latest tab selects recent-first feed without duplicate search',
+      (tester) async {
+    await tester.pumpWidget(const WeuTubeApp());
+    await tester.tap(find.text('Latest').first);
+    await tester.pump();
+    expect(find.text('Latest'), findsOneWidget);
+    expect(find.byTooltip('Search creators and videos'), findsOneWidget);
+  });
+
+  testWidgets('Shorts has a dedicated immersive layout', (tester) async {
+    await tester.pumpWidget(const WeuTubeApp());
+    await tester.tap(find.text('Shorts').last);
+    await tester.pump();
+    expect(find.byType(WeuTubeBrand), findsNothing);
+    expect(find.text('Shorts'), findsWidgets);
+  });
+
 }
