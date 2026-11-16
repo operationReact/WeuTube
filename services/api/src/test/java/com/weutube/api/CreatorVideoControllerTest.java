@@ -39,6 +39,22 @@ class CreatorVideoControllerTest {
   assertEquals(HttpStatus.CONFLICT,error.getStatusCode());
   verify(videos,never()).delete(any());
  }
+ @Test void cannotReadAnotherCreatorsVideoDetails() {
+  VideoSubmission video=new VideoSubmission(new Creator("owner","Creator"),"Private Video");
+  when(videos.findById(video.id)).thenReturn(Optional.of(video));
+  ResponseStatusException error=assertThrows(ResponseStatusException.class,
+   ()->controller.details(stranger,video.id));
+  assertEquals(HttpStatus.NOT_FOUND,error.getStatusCode());
+ }
+ @Test void ownerCanReadRejectionReason() {
+  VideoSubmission video=new VideoSubmission(new Creator("owner","Creator"),"Private Video");
+  video.status="REJECTED";
+  video.rejectionReason="Copyright ownership not established";
+  when(videos.findById(video.id)).thenReturn(Optional.of(video));
+  var result=controller.details(owner,video.id);
+  assertEquals("REJECTED",result.status());
+  assertEquals("Copyright ownership not established",result.rejectionReason());
+ }
  @Test void canRenameOwnedDraft() {
   VideoSubmission video=new VideoSubmission(new Creator("owner","Creator"),"Original");
   when(videos.findById(video.id)).thenReturn(Optional.of(video));
