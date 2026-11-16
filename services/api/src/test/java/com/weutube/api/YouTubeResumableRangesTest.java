@@ -16,6 +16,11 @@ class YouTubeResumableRangesTest {
     ()->YouTubeResumableRanges.requireNextChunk(range,8388608));
  }
 
+ @Test void resumedChunksCanStartAtGoogleConfirmedPartialOffset() {
+  var chunk=YouTubeResumableRanges.parseChunk("bytes 1-262144/262145",262144);
+  assertEquals(1,chunk.first());
+  YouTubeResumableRanges.requireNextChunk(chunk,1);
+ }
  @Test void acceptsFinalUnalignedChunk() {
   var range=YouTubeResumableRanges.parseChunk(
     "bytes 8388608-8388618/8388619",11);
@@ -27,7 +32,6 @@ class YouTubeResumableRangesTest {
   for(String invalid:new String[] {
     "bytes 0-16777215/16777216", // too large: 16 MiB request
     "bytes 0-300000/16777216",   // non-final chunk not 256 KiB aligned
-    "bytes 1-262144/16777216",   // first byte must be 256 KiB aligned
     "bytes 0-100/99",            // beyond total
     "bytes -1-100/200",          // negative
     "bytes 5-2/100",             // reversed
