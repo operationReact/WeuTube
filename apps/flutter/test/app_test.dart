@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show debugDumpRenderTree;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weutube/main.dart';
 import 'package:weutube/product_ui.dart' show WeuTubeBrand;
@@ -133,7 +132,6 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(320, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const WeuTubeApp());
-    debugDumpRenderTree(); // TEMPORARY 320dp overflow investigation.
     expect(tester.takeException(), isNull,
       reason: 'Home must not overflow before navigating to Explore');
     await tester.tap(find.text('Explore').last);
