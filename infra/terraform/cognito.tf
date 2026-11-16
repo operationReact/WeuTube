@@ -33,7 +33,7 @@ resource "aws_cognito_user_pool_client" "weutube" {
   name = "${local.prefix}-creator"
   user_pool_id = aws_cognito_user_pool.weutube[0].id
   generate_secret = false
-  explicit_auth_flows = ["ALLOW_USER_SRP_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
+  explicit_auth_flows = ["ALLOW_USER_SRP_AUTH", "ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
   prevent_user_existence_errors = "ENABLED"
   enable_token_revocation = true
   access_token_validity = 60
