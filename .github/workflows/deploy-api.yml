@@ -130,6 +130,9 @@ jobs:
           curl --fail --silent --show-error --max-time 15 https://api.weutube.com/actuator/health
           curl --fail --silent --show-error --max-time 15 -o /dev/null https://weutube.com/
           curl --fail --silent --show-error --max-time 15 https://api.weutube.com/api/public/status | jq -e '.service == "weutube-api"' >/dev/null
+          curl --fail --silent --show-error --max-time 20 'https://api.weutube.com/api/public/social/feed?limit=10' \
+            | jq -e '.demoContentIncluded == true and (.items | length >= 5)' >/dev/null
+          echo "Verified populated social feed, backed by published videos plus labelled demo fixtures"
       - name: Publish verified deployment details
         run: |
           {
@@ -138,5 +141,5 @@ jobs:
             echo "Website: https://weutube.com/"
             echo "Elastic IP: $API_EIP"
             echo "Google OAuth redirect: https://api.weutube.com/api/admin/youtube/callback"
-            echo "Note: API-backed UI is deployed; real user flows, YouTube permissions and payouts require live acceptance tests."
+            echo "Social-first app and public populated feed deployed; demo engagements remain separate from real authenticated data."
           } >> "$GITHUB_STEP_SUMMARY"
