@@ -284,11 +284,11 @@ public class CreatorResumableUploadController {
  @DeleteMapping("/{id}")
  public Status cancel(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id) {
   Session s=session(id,jwt.getSubject());
-  if("SENDING".equals(s.status()))
-   throw conflict("Cannot cancel while a chunk is in flight");
+  if("SENDING".equals(s.status()) || "RECONCILE".equals(s.status()))
+   throw conflict("Verify YouTube progress before cancelling an uncertain upload");
   if(!"COMPLETED".equals(s.status())) jdbc.update("""
     UPDATE youtube_resumable_uploads SET status='CANCELLED',updated_at=now()
-    WHERE id=? AND status IN ('ACTIVE','RECONCILE','INITIATING')
+    WHERE id=? AND status IN ('ACTIVE','INITIATING')
     """,id);
   return publicStatus(id,jwt.getSubject());
  }
