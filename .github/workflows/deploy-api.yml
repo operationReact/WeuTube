@@ -38,6 +38,7 @@ jobs:
           echo "API_EIP=$(terraform output -raw api_eip)" >> "$GITHUB_ENV"
           echo "ARTIFACT_BUCKET=$(terraform output -raw api_artifacts_bucket)" >> "$GITHUB_ENV"
           echo "COGNITO_ISSUER=$(terraform output -raw cognito_issuer_uri)" >> "$GITHUB_ENV"
+          echo "COGNITO_CLIENT_ID=$(terraform output -raw cognito_client_id)" >> "$GITHUB_ENV"
           echo "DEPLOY_ROLE=$(terraform output -raw github_api_deploy_role_arn)" >> "$GITHUB_ENV"
       - name: Verify required encrypted SSM parameters without exposing values
         run: |
@@ -92,7 +93,7 @@ jobs:
           set -euo pipefail
           test "$(aws sts get-caller-identity --query Account --output text)" = "098859530205"
           base="s3://$ARTIFACT_BUCKET/releases/$GITHUB_SHA"
-          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --region ap-south-1 --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' api.weutube.com '$COGNITO_ISSUER' verify"
+          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --region ap-south-1 --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' api.weutube.com '$COGNITO_ISSUER' verify '$COGNITO_CLIENT_ID'"
           params="$(jq -nc --arg cmd "$cmd" '{commands:[$cmd],executionTimeout:["1800"]}')"
           command_id="$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
