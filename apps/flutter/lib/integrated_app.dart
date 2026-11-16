@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'backend_client.dart';
 import 'admin_panel.dart';
 import 'social_feed.dart';
+import 'social_design_widgets.dart';
 import 'product_ui.dart' show WeuTubeBrand, navy, coral, soft, slate, success;
 
 /// Responsive production API-connected creator experience for Android, iOS and web.
@@ -598,9 +599,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     final isSocial=socialPages.contains(page);
     final isAuth=authPages.contains(page);
     const tabs=['Home','Explore','Shorts','Create','You'];
-    const icons=[Icons.home_outlined,Icons.explore_outlined,
-      Icons.play_circle_outline_rounded,Icons.add_box_outlined,Icons.person_outline];
-    final selected=tabs.contains(page)?tabs.indexOf(page):4;
+    final activeTab=tabs.contains(page)?page:'You';
     return Scaffold(
       drawer:api.signedIn&&!wide&&!isSocial
         ?Drawer(child:SafeArea(child:sideNav())):null,
@@ -619,8 +618,13 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
             if(!api.signedIn&&wide)
               TextButton(onPressed:()=>navigate('Sign In'),
                 child:const Text('Sign In')),
+            if(isSocial)
+              IconButton(onPressed:()=>navigate('Explore'),
+                tooltip:'Explore creators',
+                icon:const Icon(Icons.search_rounded,color:navy)),
             if(!api.signedIn&&!wide)
               IconButton(onPressed:()=>navigate('Sign In'),
+                tooltip:'Sign in',
                 icon:const Icon(Icons.login_rounded,color:navy)),
             if(api.signedIn) ...[
               if(api.showAdminMenu)
@@ -658,13 +662,9 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                 ])))))
         ]))
       ])),
-      bottomNavigationBar:!isAuth?NavigationBar(
-        height:68,selectedIndex:selected,
-        onDestinationSelected:(i)=>navigate(tabs[i]),
-        destinations:[
-          for(int i=0;i<tabs.length;i++)
-            NavigationDestination(icon:Icon(icons[i]),label:tabs[i])
-        ]):null
+      bottomNavigationBar:!isAuth
+        ?WeuSocialBottomBar(selected:activeTab,onSelect:navigate)
+        :null
     );
   }
 }
