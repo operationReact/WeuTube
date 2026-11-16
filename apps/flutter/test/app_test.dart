@@ -1,11 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weutube/main.dart';
+import 'package:weutube/product_ui.dart' show WeuTubeBrand, WeuTubeBrandIcon;
 
 void main() {
   testWidgets('landing displays WeuTube brand and onboarding', (tester) async {
     await tester.pumpWidget(const WeuTubeApp());
-    expect(find.text('Weu'), findsWidgets);
-    expect(find.text('Tube'), findsWidgets);
+    // The approved master artwork is one vector, never separately typeset text.
+    expect(find.byType(WeuTubeBrand), findsWidgets);
+    expect(find.byType(WeuTubeBrandIcon), findsNothing);
     expect(find.text('Create Account'), findsWidgets);
     expect(find.text('Sign In'), findsWidgets);
     expect(find.text('Built for creators'), findsOneWidget);
