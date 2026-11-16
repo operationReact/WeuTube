@@ -1,4 +1,5 @@
 package com.weutube.api;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -31,7 +32,9 @@ public class SecurityConfig {
    .csrf(csrf -> csrf.disable())
    .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
    .authorizeHttpRequests(a -> a
+     .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
      .requestMatchers("/actuator/health","/api/public/**").permitAll()
+     .requestMatchers(HttpMethod.GET,"/api/social/videos/*/comments").permitAll()
      .requestMatchers(HttpMethod.GET,"/api/admin/youtube/callback").permitAll()
      .requestMatchers(HttpMethod.OPTIONS,"/**").permitAll()
      .anyRequest().authenticated())
