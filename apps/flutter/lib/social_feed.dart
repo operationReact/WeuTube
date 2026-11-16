@@ -412,9 +412,13 @@ class _SocialHubState extends State<SocialHub> {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(9, 3, 9, 6),
-      child: ClipRRect(borderRadius: BorderRadius.circular(22),
-        child: ColoredBox(color: const Color(0xFF0A1631),
-          child: LayoutBuilder(builder: (context, bounds) {
+      // A dark rounded card remains; do not clip the YouTube iframe's corners.
+      // Even minor masks on the official player are prohibited.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A1631),
+          borderRadius: BorderRadius.circular(22)),
+        child: LayoutBuilder(builder: (context, bounds) {
             final videoHeight = math.max(200.0,
                 math.min(350.0, bounds.maxWidth * 9 / 16));
             final enoughRoom = bounds.maxHeight >= videoHeight + 235;
@@ -434,7 +438,7 @@ class _SocialHubState extends State<SocialHub> {
                 ? Align(alignment: Alignment.bottomCenter, child: footer)
                 : SingleChildScrollView(child: footer))
             ]);
-          }))));
+          })));
   }
 
   /// Video-first, full-height card: content takes the screen instead of
