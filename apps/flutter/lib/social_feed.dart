@@ -664,8 +664,7 @@ class _SocialHubState extends State<SocialHub> {
         padding:const EdgeInsets.fromLTRB(15,5,10,5),
         child:Row(children:[
           for(final choice in ['For you','Following','Latest'])
-            Padding(padding:const EdgeInsets.only(right:13),
-              child:InkWell(onTap:(){
+            Expanded(child:InkWell(onTap:(){
                 setState((){feedChoice=choice;homeIndex=0;});
                 WidgetsBinding.instance.addPostFrameCallback((_){
                   if(homePager.hasClients)homePager.jumpToPage(0);
