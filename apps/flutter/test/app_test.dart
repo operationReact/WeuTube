@@ -18,8 +18,8 @@ void main() {
     await tester.pumpWidget(const WeuTubeApp());
     await tester.tap(find.text('Explore').first);
     await tester.pump();
-    expect(find.text('Explore your world'), findsOneWidget);
-    expect(find.text('Trending discoveries'), findsOneWidget);
+    expect(find.text('People, passions and places worth finding.'), findsOneWidget);
+    expect(find.text('For your curiosity'), findsOneWidget);
   });
 
   testWidgets('Sign-in is available when a person wants to create', (tester) async {
