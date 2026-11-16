@@ -10,6 +10,8 @@ public class VideoSubmission {
  @Column(nullable=false,length=200) public String title;
  @Column(nullable=false,length=32) public String status;
  @Column(name="youtube_video_id",length=128) public String youtubeVideoId;
+ @Column(name="category",length=50,nullable=false) public String category="Stories";
+ @Column(name="description",nullable=false) public String description="";
  @Column(name="rejection_reason") public String rejectionReason;
  @Column(name="created_at",nullable=false) public Instant createdAt;
  @Column(name="updated_at",nullable=false) public Instant updatedAt;
