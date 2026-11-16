@@ -70,7 +70,7 @@ public class SocialFeedController {
   // Public visibility MUST NOT depend on creator-controlled draft status.
   List<FeedItem> live=jdbc.query("""
    SELECT v.id,v.title,c.display_name,c.id,v.youtube_video_id,
-     v.created_at,
+     v.created_at,v.category,v.description,
      (SELECT COUNT(*) FROM social_video_likes l WHERE l.video_id=v.id),
      (SELECT COUNT(*) FROM social_video_comments cm WHERE cm.video_id=v.id)
    FROM video_submissions v JOIN creators c ON c.id=v.creator_id
@@ -79,10 +79,10 @@ public class SocialFeedController {
    """,(rs,i)-> {
     String yt=rs.getString(5);
     return new FeedItem(rs.getString(1),rs.getString(2),rs.getString(3),
-      rs.getString(4),"@creator","Stories","Published on WeuTube's channel",
+      rs.getString(4),"@creator",rs.getString(7),rs.getString(8),
       "https://i.ytimg.com/vi/"+yt+"/hqdefault.jpg",
       null,"https://www.youtube.com/watch?v="+yt,null,
-      rs.getLong(7),rs.getLong(8),"",false,
+      rs.getLong(9),rs.getLong(10),"",false,
       rs.getTimestamp(6)==null?null:rs.getTimestamp(6).toInstant());
    },cap);
   List<FeedItem> output=new ArrayList<>();
