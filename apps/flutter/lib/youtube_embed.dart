@@ -76,7 +76,7 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
     if (state != AppLifecycleState.resumed) {
       // Never continue YouTube audio or playback behind other screens.
       final controller = _controller;
-      if (controller != null && controller.value.isReady) {
+      if (controller != null && controller.value.playerState != PlayerState.unknown) {
         unawaited(controller.pauseVideo().catchError((Object _) {}));
       }
     }
@@ -87,7 +87,7 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
     final previous = _controller;
     _controller = null;
     if (previous != null) {
-      if (previous.value.isReady) {
+      if (previous.value.playerState != PlayerState.unknown) {
         unawaited(previous.pauseVideo().catchError((Object _) {}));
       }
       unawaited(previous.close().catchError((Object _) {}));
@@ -133,7 +133,7 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
     WidgetsBinding.instance.removeObserver(this);
     final controller = _controller;
     if (controller != null) {
-      if (controller.value.isReady) {
+      if (controller.value.playerState != PlayerState.unknown) {
         unawaited(controller.pauseVideo().catchError((Object _) {}));
       }
       unawaited(controller.close().catchError((Object _) {}));
