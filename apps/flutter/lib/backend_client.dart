@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
+import 'youtube_upload_rules.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
 
@@ -183,21 +184,19 @@ class WeuTubeApi {
     String draftId,String channelId,PlatformFile file, {
     void Function(int percent)? onTransferProgress,
   }) async {
-    const maxUpload = 256 * 1024 * 1024;
-    if(file.size <= 0 || file.size > maxUpload)
-      throw const ApiFailure('Choose a video smaller than 256 MB.');
+    if(file.size <= 0 || file.size > YouTubeUploadRules.directGatewayMaxBytes)
+      throw const ApiFailure(
+        'Direct WeuTube uploads currently support 256 MiB. YouTube allows '
+        'up to 256 GB; larger files need a resumable WeuTube upload pathway.');
     if(!signedIn) throw const ApiFailure('Sign in first.',401);
     final rawStream = file.readStream ??
       (file.bytes == null ? null : Stream<List<int>>.value(file.bytes!));
     if(rawStream == null)
       throw const ApiFailure('Unable to read this video from your device.');
-    final lower = file.name.toLowerCase();
-    final type = lower.endsWith('.mp4') ? 'video/mp4' :
-      lower.endsWith('.mov') ? 'video/quicktime' :
-      lower.endsWith('.webm') ? 'video/webm' :
-      lower.endsWith('.mkv') ? 'video/x-matroska' : null;
+    final type = YouTubeUploadRules.mimeForFilename(file.name);
     if(type == null)
-      throw const ApiFailure('Use an MP4, MOV, WebM or MKV file.');
+      throw const ApiFailure(
+        'This file container is not in the supported YouTube video list.');
     var transferred = 0;
     var reported = -1;
     final countingStream = rawStream.map((chunk) {
