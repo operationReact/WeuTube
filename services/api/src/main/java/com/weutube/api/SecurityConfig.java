@@ -19,7 +19,7 @@ public class SecurityConfig {
   var cors=new CorsConfiguration();
   cors.setAllowedOrigins(List.of("https://weutube.com","https://www.weutube.com"));
   cors.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-  cors.setAllowedHeaders(List.of("Authorization","Content-Type"));
+  cors.setAllowedHeaders(List.of("Authorization","Content-Type","Content-Range"));
   cors.setMaxAge(3600L);
   cors.setAllowCredentials(false);
   var source=new UrlBasedCorsConfigurationSource();
