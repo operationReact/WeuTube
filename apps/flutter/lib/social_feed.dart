@@ -5,7 +5,7 @@ import 'package:video_player/video_player.dart';
 import 'backend_client.dart';
 import 'social_demo_data.dart';
 import 'social_design_widgets.dart';
-import 'product_ui.dart' show navy, coral, soft, slate, success;
+import 'product_ui.dart' show navy, coral, soft, slate;
 
 /// A filled, mobile-first social experience. Public demo content is explicitly
 /// labelled and cannot create real platform activity or earnings.
@@ -860,62 +860,129 @@ class _SocialHubState extends State<SocialHub> {
     ]))
   ]);
 
-  Widget profile() => ListView(padding:const EdgeInsets.all(19),children:[
-    const SizedBox(height:6),
-    card(Column(children:[
-      const CircleAvatar(radius:39,backgroundColor:soft,
-        child:Icon(Icons.person_outline_rounded,size:43,color:navy)),
-      const SizedBox(height:13),
-      Text(widget.api.signedIn?'Your WeuTube space':'Join the community',
-        style:const TextStyle(fontSize:23,fontWeight:FontWeight.w900,color:navy)),
-      const SizedBox(height:6),
-      Text(widget.api.signedIn
-        ? 'Manage content, performance and verified payouts.'
-        : 'Follow creators, join conversations and share your own stories.',
-        textAlign:TextAlign.center,style:const TextStyle(color:slate)),
+  Widget profile() => ListView(
+    padding:const EdgeInsets.fromLTRB(14,12,14,30),children:[
+      Container(padding:const EdgeInsets.all(20),
+        decoration:BoxDecoration(color:navy,
+          borderRadius:BorderRadius.circular(24)),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          const Row(children:[
+            Text('YOUR WORLD',style:TextStyle(color:Color(0xFFFFA99A),
+              fontWeight:FontWeight.w900,fontSize:11,letterSpacing:1.1)),
+            Spacer(),
+            Icon(Icons.auto_awesome_rounded,color:coral,size:23)
+          ]),
+          const SizedBox(height:16),
+          Row(children:[
+            Container(width:72,height:72,
+              decoration:BoxDecoration(shape:BoxShape.circle,
+                color:Colors.white.withValues(alpha:.11),
+                border:Border.all(color:Colors.white30)),
+              child:const Icon(Icons.person_rounded,color:Colors.white,size:43)),
+            const SizedBox(width:15),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+              children:[
+                Text(widget.api.signedIn?'Your creator profile':'Your story starts here',
+                  maxLines:2,style:const TextStyle(
+                    color:Colors.white,fontSize:21,fontWeight:FontWeight.w900)),
+                const SizedBox(height:5),
+                Text(widget.api.signedIn?'Connected to your WeuTube account':
+                  'Discover creators. Save what inspires you.',
+                  style:const TextStyle(color:Colors.white70,fontSize:12))
+              ]))
+          ]),
+          const SizedBox(height:19),
+          Row(children:[
+            Expanded(child:_profileStat(following.length.toString(),'Following')),
+            const SizedBox(width:12),
+            Expanded(child:_profileStat(saved.length.toString(),'Saved')),
+            const SizedBox(width:12),
+            Expanded(child:_profileStat(
+              widget.api.signedIn?'Live':'Guest','Mode'))
+          ]),
+          const SizedBox(height:17),
+          SizedBox(width:double.infinity,
+            child:FilledButton.icon(
+              style:FilledButton.styleFrom(
+                backgroundColor:coral,
+                padding:const EdgeInsets.symmetric(vertical:13)),
+              onPressed:widget.api.signedIn?widget.onStudio:widget.onSignIn,
+              icon:Icon(widget.api.signedIn?Icons.dashboard_outlined:Icons.login_rounded),
+              label:Text(widget.api.signedIn?'Open Creator Studio':'Sign in / Create account')))
+        ])),
+      sectionTitle('Your collection'),
+      Row(children:[
+        Expanded(child:_collectionTile('Saved stories',
+          Icons.bookmark_rounded,()=>widget.onNavigate('Saved'))),
+        const SizedBox(width:10),
+        Expanded(child:_collectionTile('People you follow',
+          Icons.people_alt_rounded,()=>widget.onNavigate('Following')))
+      ]),
+      sectionTitle('Creators to discover',
+        trailing:'Explore',onTap:()=>widget.onNavigate('Explore')),
+      SizedBox(height:155,child:ListView(scrollDirection:Axis.horizontal,
+        children:[
+          for(final p in items.take(6))
+            Padding(padding:const EdgeInsets.only(right:10),
+              child:InkWell(onTap:()=>follow(p),
+                borderRadius:BorderRadius.circular(16),
+                child:Container(width:110,padding:const EdgeInsets.all(10),
+                  decoration:BoxDecoration(color:Colors.white,
+                    borderRadius:BorderRadius.circular(16)),
+                  child:Column(children:[
+                    CreatorPortrait(name:str(p['creator']),
+                      imageUrl:avatar(p),radius:28),
+                    const SizedBox(height:8),
+                    Text(str(p['creator']),maxLines:1,
+                      overflow:TextOverflow.ellipsis,
+                      style:const TextStyle(color:navy,
+                        fontWeight:FontWeight.w800,fontSize:11)),
+                    const SizedBox(height:5),
+                    Text(following.contains(followKey(p))?'Following':'+ Follow',
+                      style:const TextStyle(color:coral,
+                        fontWeight:FontWeight.w800,fontSize:11))
+                  ]))))
+        ])),
+      sectionTitle('Creator tools'),
+      Container(decoration:BoxDecoration(color:Colors.white,
+        borderRadius:BorderRadius.circular(16)),
+        child:Column(children:[
+          for(final entry in [
+            ['My Videos',Icons.video_library_outlined],
+            ['Analytics',Icons.insights_rounded],
+            ['Wallet',Icons.account_balance_wallet_outlined],
+            ['Settings',Icons.settings_outlined]
+          ])
+            ListTile(leading:Icon(entry[1] as IconData,color:navy),
+              title:Text(entry[0] as String),
+              trailing:const Icon(Icons.chevron_right,color:slate),
+              onTap:()=>widget.api.signedIn?
+                widget.onNavigate(entry[0] as String):widget.onSignIn())
+        ])),
       const SizedBox(height:17),
-      if(!widget.api.signedIn)
-        SizedBox(width:double.infinity,child:FilledButton(
-          onPressed:widget.onSignIn,
-          style:FilledButton.styleFrom(backgroundColor:coral),
-          child:const Text('Sign in or create an account'))),
-      if(widget.api.signedIn)
-        SizedBox(width:double.infinity,child:FilledButton.icon(
-          onPressed:widget.onStudio,icon:const Icon(Icons.dashboard_outlined),
-          style:FilledButton.styleFrom(backgroundColor:coral),
-          label:const Text('Open Creator Studio')))
-    ])),
-    sectionTitle('Your collection'),
-    card(Column(children:[
-      ListTile(leading:const Icon(Icons.bookmarks_outlined,color:coral),
-        title:const Text('Saved stories'),
-        trailing:Text(saved.length.toString(),style:const TextStyle(
-          color:navy,fontWeight:FontWeight.w900)),
-        onTap:()=>widget.onNavigate('Saved')),
-      ListTile(leading:const Icon(Icons.people_alt_outlined,color:coral),
-        title:const Text('Following'),
-        trailing:Text(following.length.toString(),style:const TextStyle(
-          color:navy,fontWeight:FontWeight.w900)),
-        onTap:()=>widget.onNavigate('Following'))
-    ])),
-    sectionTitle('Creator tools'),
-    card(Column(children:[
-      for(final entry in [
-        ['My Videos',Icons.video_library_outlined],
-        ['Analytics',Icons.bar_chart_rounded],
-        ['Wallet',Icons.account_balance_wallet_outlined],
-        ['Settings',Icons.settings_outlined]
-      ])
-        ListTile(leading:Icon(entry[1] as IconData,color:navy),
-          title:Text(entry[0] as String),
-          trailing:const Icon(Icons.chevron_right,color:slate),
-          onTap:()=>widget.api.signedIn?
-            widget.onNavigate(entry[0] as String):widget.onSignIn())
-    ])),
-    const SizedBox(height:16),
-    const Text('Demo posts and interactions are for preview only. Real content and earnings are never fabricated.',
-      textAlign:TextAlign.center,style:TextStyle(color:slate,fontSize:11))
-  ]);
+      const Text('Preview creators and sample reactions are demonstration data.',
+        textAlign:TextAlign.center,
+        style:TextStyle(color:slate,fontSize:10))
+    ]);
+  Widget _profileStat(String count,String title) =>
+    Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Text(count,style:const TextStyle(color:Colors.white,
+        fontSize:22,fontWeight:FontWeight.w900)),
+      const SizedBox(height:3),
+      Text(title,style:const TextStyle(
+        color:Colors.white70,fontSize:11))
+    ]);
+  Widget _collectionTile(String name,IconData icon,VoidCallback tap) =>
+    InkWell(onTap:tap,borderRadius:BorderRadius.circular(17),
+      child:Container(height:109,padding:const EdgeInsets.all(15),
+        decoration:BoxDecoration(color:Colors.white,
+          borderRadius:BorderRadius.circular(17)),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Icon(icon,color:coral,size:25),
+          const Spacer(),
+          Text(name,style:const TextStyle(color:navy,
+            fontWeight:FontWeight.w900,fontSize:12))
+        ])));
 
   Widget savedView() => ListView(
     padding:const EdgeInsets.all(15),
