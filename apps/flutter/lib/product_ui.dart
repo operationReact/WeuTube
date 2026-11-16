@@ -1,25 +1,47 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'approved_brand_icon.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
-const navy = Color(0xFF0B1F4D);
-const coral = Color(0xFFFF4B3A);
+/// Colors sampled from the user's approved master logo.
+const navy = Color(0xFF031B4B);
+const coral = Color(0xFFFE3F23);
 const soft = Color(0xFFF8F9FC);
 const slate = Color(0xFF657087);
 const success = Color(0xFF22865B);
 
-/// The shared design system is used for web, Android and iOS.
+/// Single-source brand lockup used across web, Android and iOS.
+/// DO NOT rebuild the original letterforms using a Text widget.
 class WeuTubeBrand extends StatelessWidget {
   final double size;
   const WeuTubeBrand({super.key, this.size = 24});
+
   @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-    Image.memory(base64Decode(approvedBrandIconBase64),
-      width: size * 1.25, height: size, fit: BoxFit.contain),
-    SizedBox(width: size * .28),
-    Text('Weu', style: TextStyle(color: navy, fontSize: size, fontWeight: FontWeight.w900, letterSpacing: -.6)),
-    Text('Tube', style: TextStyle(color: coral, fontSize: size, fontWeight: FontWeight.w900, letterSpacing: -.6)),
-  ]);
+  Widget build(BuildContext context) => Semantics(
+    label: 'WeuTube',
+    image: true,
+    child: SvgPicture.asset(
+      'assets/brand/weutube-logo.svg',
+      height: size * 1.1,
+      fit: BoxFit.contain,
+      alignment: Alignment.centerLeft,
+    ),
+  );
+}
+
+/// Exact approved connected-people icon for compact brand contexts.
+class WeuTubeBrandIcon extends StatelessWidget {
+  final double size;
+  const WeuTubeBrandIcon({super.key, this.size = 32});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'WeuTube icon',
+    image: true,
+    child: SvgPicture.asset(
+      'assets/brand/weutube-icon.svg',
+      height: size,
+      fit: BoxFit.contain,
+    ),
+  );
 }
 
 class WeuTubeProduct extends StatefulWidget {
