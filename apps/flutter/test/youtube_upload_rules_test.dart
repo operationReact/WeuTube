@@ -15,15 +15,15 @@ void main() {
 
   test('YouTube title max is 100 Unicode characters without angle brackets', () {
     expect(YouTubeUploadRules.titleError('Some title'), isNull);
-    expect(YouTubeUploadRules.titleError('😀' * 100), isNull);
-    expect(YouTubeUploadRules.titleError('x' * 101), isNotNull);
+    expect(YouTubeUploadRules.titleError(List.filled(100, '😀').join()), isNull);
+    expect(YouTubeUploadRules.titleError(List.filled(101, 'x').join()), isNotNull);
     expect(YouTubeUploadRules.titleError('hello <world>'), isNotNull);
   });
 
   test('YouTube description max is UTF-8 bytes, not glyph count', () {
-    expect(YouTubeUploadRules.descriptionError('a' * 5000), isNull);
-    expect(YouTubeUploadRules.descriptionError('😀' * 1250), isNull);
-    expect(YouTubeUploadRules.descriptionError('😀' * 1251), isNotNull);
+    expect(YouTubeUploadRules.descriptionError(List.filled(5000, 'a').join()), isNull);
+    expect(YouTubeUploadRules.descriptionError(List.filled(1250, '😀').join()), isNull);
+    expect(YouTubeUploadRules.descriptionError(List.filled(1251, '😀').join()), isNotNull);
     expect(YouTubeUploadRules.descriptionError('a>b'), isNotNull);
   });
 
