@@ -17,6 +17,15 @@ jobs:
           channel: stable
       - run: flutter create --platforms=android,ios,web --org com.weutube .
         working-directory: apps/flutter
+      - name: Generate approved platform branding
+        working-directory: apps/flutter
+        run: |
+          python3 -m venv /tmp/weutube-brand-venv
+          /tmp/weutube-brand-venv/bin/pip install --quiet 'cairosvg>=2.7,<3' 'Pillow>=10,<13'
+          /tmp/weutube-brand-venv/bin/python tool/generate_brand_icons.py
+          test -f web/favicon.png
+          test -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          test -f ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json
       - run: rm -f test/widget_test.dart analysis_options.yaml
         working-directory: apps/flutter
       - run: flutter pub get
