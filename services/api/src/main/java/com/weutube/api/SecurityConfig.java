@@ -14,6 +14,7 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthen
 import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -24,6 +25,14 @@ public class SecurityConfig {
   return new OAuth2AuthenticationException(new BearerTokenError(
     BearerTokenErrorCodes.INVALID_TOKEN,HttpStatus.UNAUTHORIZED,
     "Invalid Cognito access token for this application",null));
+ }
+ static JwtAuthenticationToken validateCognitoAccess(Jwt token,String expectedClientId) {
+  if(!"access".equals(token.getClaimAsString("token_use")))
+   throw invalidToken();
+  if(!expectedClientId.isBlank()
+    && !expectedClientId.equals(token.getClaimAsString("client_id")))
+   throw invalidToken();
+  return new JwtAuthenticationToken(token);
  }
  @Bean CorsConfigurationSource corsConfigurationSource() {
   var cors=new CorsConfiguration();
@@ -60,13 +69,8 @@ public class SecurityConfig {
      .requestMatchers(HttpMethod.GET,"/api/admin/youtube/callback").permitAll()
      .requestMatchers(HttpMethod.OPTIONS,"/**").permitAll()
      .anyRequest().authenticated())
-   .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(token -> {
-      if (!"access".equals(token.getClaimAsString("token_use")))
-       throw invalidToken();
-      if(!expectedClientId.isBlank()
-        && !expectedClientId.equals(token.getClaimAsString("client_id")))
-       throw invalidToken();
-      return new JwtAuthenticationToken(token);
-    }))).build();
+   .oauth2ResourceServer(o -> o.jwt(j ->
+       j.jwtAuthenticationConverter(token ->
+         validateCognitoAccess(token,expectedClientId)))).build();
  }
 }
