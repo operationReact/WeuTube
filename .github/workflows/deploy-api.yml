@@ -126,6 +126,7 @@ jobs:
           done
           curl --fail --silent --show-error --max-time 15 https://api.weutube.com/actuator/health
           curl --fail --silent --show-error --max-time 15 -o /dev/null https://weutube.com/
+          curl --fail --silent --show-error --max-time 15 https://api.weutube.com/api/public/status | jq -e '.service == "weutube-api"' >/dev/null
       - name: Publish verified deployment details
         run: |
           {
