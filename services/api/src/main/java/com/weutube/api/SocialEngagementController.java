@@ -99,7 +99,7 @@ public class SocialEngagementController {
   return Map.of("following",false);
  }
  @GetMapping("/me")
- @Transactional(readOnly=true)
+ @Transactional
  public Map<String,List<String>> myState(@AuthenticationPrincipal Jwt jwt) {
   UUID me=current(jwt);
   return Map.of(
