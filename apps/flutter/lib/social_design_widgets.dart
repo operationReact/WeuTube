@@ -268,7 +268,7 @@ class _SocialMediaStageState extends State<SocialMediaStage>
                       Text(muted ? 'Tap to unmute' : 'Sound on',
                         style: const TextStyle(color: Colors.white,
                           fontSize: 10, fontWeight: FontWeight.w700))
-                    ]))))),
+                    ])))))),
         if (ready && controller != null)
           Positioned(bottom: 0, left: 0, right: 0,
             child: VideoProgressIndicator(controller,
