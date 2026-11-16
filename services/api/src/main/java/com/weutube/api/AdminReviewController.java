@@ -55,15 +55,18 @@ public class AdminReviewController {
     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid decision");
   if (decision.equals("REJECTED") && (request.reason()==null || request.reason().isBlank()))
     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Rejection reason required");
-  VideoSubmission video=videos.findById(id)
-    .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Submission not found"));
-  if (!"PRIVATE_REVIEW".equals(video.status))
-    throw new ResponseStatusException(HttpStatus.CONFLICT,"Only private-review submissions can be reviewed");
-  video.status=decision;
-  video.updatedAt=Instant.now();
-  videos.save(video);
-  jdbc.update("UPDATE video_submissions SET rejection_reason = ? WHERE id = ?",
-    decision.equals("REJECTED") ? request.reason().trim() : null,id);
+  // Conditional state transition is atomic across concurrent admin requests.
+  // Only the winner may write a decision event.
+  int changed=jdbc.update("""
+   UPDATE video_submissions
+   SET status=?, rejection_reason=?, updated_at=now()
+   WHERE id=? AND status='PRIVATE_REVIEW'
+   """,decision,decision.equals("REJECTED")?request.reason().trim():null,id);
+  if (changed!=1) {
+   if (!videos.existsById(id))
+    throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Submission not found");
+   throw new ResponseStatusException(HttpStatus.CONFLICT,"Submission has already been reviewed");
+  }
   jdbc.update("INSERT INTO video_review_events(id,video_id,reviewer_sub,decision,reason) VALUES (?,?,?,?,?)",
     UUID.randomUUID(),id,jwt.getSubject(),decision,request.reason());
   return Map.of("videoId",id.toString(),"status",decision);
