@@ -52,6 +52,12 @@ public class YouTubeConnectionService {
    GoogleYouTubeClient.Tokens tokens=google.exchange(code);
    GoogleYouTubeClient.Channel channel=google.channelFor(tokens.accessToken());
    credentials.saveVerifiedChannel(channel.id(),channel.title(),tokens.refreshToken(),adminSub);
+   jdbc.update("""
+      INSERT INTO youtube_channels(id,youtube_channel_id,display_name,connected_at)
+      VALUES (?,?,?,now())
+      ON CONFLICT (youtube_channel_id) DO UPDATE
+      SET display_name=EXCLUDED.display_name, connected_at=now()
+      """,java.util.UUID.randomUUID(),channel.id(),channel.title());
    return new ConnectedChannel(channel.id(),channel.title(),"connected");
   } catch (GoogleYouTubeClient.ProviderException ex) {
    // Do not return Google exception details or credential values to the browser.
