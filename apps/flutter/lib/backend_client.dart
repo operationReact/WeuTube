@@ -44,7 +44,7 @@ class WeuTubeApi {
     if(response.statusCode == 401 && auth && retry && refreshToken != null) {
       try {
         await refresh();
-        return call(method,path,data:data,auth:auth,retry:false);
+        return await call(method,path,data:data,auth:auth,retry:false);
       } catch (_) {
         clear();
         throw const ApiFailure('Session expired. Sign in again.',401);
@@ -56,7 +56,7 @@ class WeuTubeApi {
       if(status==403) throw const ApiFailure('Access denied.',403);
       if(status==404) throw const ApiFailure('Account or requested item not found.',404);
       if(status==409) throw const ApiFailure('Action conflicts with the current status.',409);
-      if(status==412 || status==428) throw const ApiFailure('Verified private video required.',status);
+      if(status==412 || status==428) throw ApiFailure('Verified private video required.',status);
       if(status==429) throw const ApiFailure('Too many requests; retry later.',429);
       throw ApiFailure('Request failed. HTTP ' + status.toString(),status);
     }
