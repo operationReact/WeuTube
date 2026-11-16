@@ -21,7 +21,10 @@ class SecurityConfigCognitoTest {
     token("access","app-client"),"app-client");
   assertTrue(authenticated.isAuthenticated());
   assertEquals("test-creator",authenticated.getName());
-  assertTrue(authenticated.getAuthorities().isEmpty());
+  assertTrue(authenticated.getAuthorities().stream().anyMatch(
+    role -> role.getAuthority().equals("ROLE_CREATOR")));
+  assertFalse(authenticated.getAuthorities().stream().anyMatch(
+    role -> role.getAuthority().equals("ROLE_ADMIN")));
  }
 
  @Test void rejectsIdTokenAsInvalidAuthenticationNotCreatorPermissionFailure() {
