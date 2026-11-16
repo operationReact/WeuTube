@@ -144,8 +144,7 @@ public class CreatorResumableUploadController {
   } catch(RuntimeException ex) {
    // A failed start cannot expose an arbitrary Google session URL.
    jdbc.update("""
-     UPDATE youtube_resumable_uploads SET status='FAILED',updated_at=now()
-     WHERE id=? AND status='INITIATING'
+     DELETE FROM youtube_resumable_uploads WHERE id=? AND status='INITIATING'
      """,id);
    jdbc.update("""
      UPDATE video_submissions SET status='DRAFT',updated_at=now()
