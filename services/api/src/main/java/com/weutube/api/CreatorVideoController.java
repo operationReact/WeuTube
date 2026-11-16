@@ -19,9 +19,30 @@ public class CreatorVideoController {
   this.creators=creators; this.videos=videos;
  }
  public record DraftRequest(@NotBlank @Size(max=200) String title) {}
+ public record DraftMetadata(@NotBlank @Size(max=100) String title,
+   @Size(max=2000) String description,@NotBlank @Size(max=50) String category) {}
+ private static final java.util.Set<String> CATEGORIES=java.util.Set.of(
+   "Travel","Art","Lifestyle","Storytelling","Education","Entertainment",
+   "Technology","Stories");
+ @PatchMapping("/videos/drafts/{id}/metadata")
+ @Transactional
+ public VideoResponse metadata(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
+    @PathVariable UUID id,@Valid @RequestBody DraftMetadata input) {
+  String title=input.title().trim(),category=input.category().trim();
+  if(title.isEmpty()||!CATEGORIES.contains(category))
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid title or category");
+  VideoSubmission video=ownedDraft(jwt,id);
+  video.title=title;
+  video.category=category;
+  video.description=input.description()==null?"":input.description().trim();
+  video.updatedAt=java.time.Instant.now();
+  videos.save(video);
+  return new VideoResponse(video.id,video.title,video.status);
+ }
  public record VideoResponse(UUID id,String title,String status) {}
  public record VideoDetails(UUID id,String title,String status,String youtubeVideoId,
-   String rejectionReason,java.time.Instant createdAt,java.time.Instant updatedAt) {}
+   String rejectionReason,String category,String description,
+   java.time.Instant createdAt,java.time.Instant updatedAt) {}
  @GetMapping("/videos/{id}")
  @Transactional(readOnly=true)
  public VideoDetails details(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
@@ -30,7 +51,8 @@ public class CreatorVideoController {
    .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Video not found"));
   if(!v.creator.cognitoSub.equals(jwt.getSubject()))
    throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Video not found");
-  return new VideoDetails(v.id,v.title,v.status,v.youtubeVideoId,v.rejectionReason,v.createdAt,v.updatedAt);
+  return new VideoDetails(v.id,v.title,v.status,v.youtubeVideoId,v.rejectionReason,
+   v.category,v.description,v.createdAt,v.updatedAt);
  }
  private VideoSubmission ownedDraft(Jwt jwt, UUID id) {
   VideoSubmission video=videos.findById(id)
