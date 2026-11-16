@@ -16,7 +16,7 @@ jobs:
           set -euo pipefail
           curl -fsS --max-time 15 'https://api.weutube.com/api/public/social/feed?limit=25' \
             | jq -e '.demoCount >= 12 and (.items | any(.creator == "Aanya Rao"))'
-          url='https://api.weutube.com/api/social/videos/00000000-0000-0000-0000-000000000000/comments'
+          url='https://api.weutube.com/api/public/social/videos/00000000-0000-0000-0000-000000000000/comments'
           status="$(curl -sS --max-time 15 -o /tmp/guest-comments.json -w '%{http_code}' "$url")"
           echo "Guest comments HTTP status: $status"
           head -c 500 /tmp/guest-comments.json || true
