@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
 
@@ -174,6 +175,65 @@ class WeuTubeApi {
         '. Confirm channel permission before retrying.');
     return asMap(jsonDecode(response.body));
   }
+  /// Stream selected videos instead of buffering the entire file in Dart.
+  /// The server caps uploads at 256 MiB and streams to YouTube privately.
+  /// Transfer progress represents bytes sent from the device, NOT review
+  /// or confirmation that YouTube accepted the upload.
+  Future<Map<String,dynamic>> uploadSelected(
+    String draftId,String channelId,PlatformFile file, {
+    void Function(int percent)? onTransferProgress,
+  }) async {
+    const maxUpload = 256 * 1024 * 1024;
+    if(file.size <= 0 || file.size > maxUpload)
+      throw const ApiFailure('Choose a video smaller than 256 MB.');
+    if(!signedIn) throw const ApiFailure('Sign in first.',401);
+    final rawStream = file.readStream ??
+      (file.bytes == null ? null : Stream<List<int>>.value(file.bytes!));
+    if(rawStream == null)
+      throw const ApiFailure('Unable to read this video from your device.');
+    final lower = file.name.toLowerCase();
+    final type = lower.endsWith('.mp4') ? 'video/mp4' :
+      lower.endsWith('.mov') ? 'video/quicktime' :
+      lower.endsWith('.webm') ? 'video/webm' :
+      lower.endsWith('.mkv') ? 'video/x-matroska' : null;
+    if(type == null)
+      throw const ApiFailure('Use an MP4, MOV, WebM or MKV file.');
+    var transferred = 0;
+    var reported = -1;
+    final countingStream = rawStream.map((chunk) {
+      transferred += chunk.length;
+      final percent = (transferred * 100 ~/ file.size).clamp(0,100);
+      if(percent > reported) {
+        reported = percent;
+        onTransferProgress?.call(percent);
+      }
+      return chunk;
+    });
+    final request = http.MultipartRequest('POST',
+      uri('/api/creator/videos/'+Uri.encodeComponent(draftId)+'/private-upload'))
+      ..headers['Authorization']='Bearer '+accessToken!
+      ..fields['channelId']=channelId
+      ..files.add(http.MultipartFile(
+        'file',countingStream,file.size,filename:file.name,
+        contentType: MediaType.parse(type)));
+    http.Response response;
+    try {
+      response = await http.Response.fromStream(
+        await _client.send(request).timeout(const Duration(minutes: 20)));
+    } catch (_) {
+      throw const ApiFailure('Connection lost or upload timed out.');
+    }
+    if(response.statusCode==401)
+      throw const ApiFailure('Your session expired.',401);
+    if(response.statusCode==403)
+      throw const ApiFailure('Channel upload permission denied.',403);
+    if(response.statusCode==413)
+      throw const ApiFailure('File exceeds the server upload limit.',413);
+    if(response.statusCode!=200 && response.statusCode!=201)
+      throw ApiFailure('Upload returned HTTP ${response.statusCode}.',response.statusCode);
+    return asMap(jsonDecode(response.body));
+  }
+
   /// Public, clearly differentiated demo fixtures and real published submissions.
   Future<Map<String,dynamic>> publicFeed() async =>
     asMap(await call('GET','/api/public/social/feed?limit=30&includeDemo=true',auth:false));
