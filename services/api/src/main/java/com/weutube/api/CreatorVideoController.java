@@ -20,6 +20,18 @@ public class CreatorVideoController {
  }
  public record DraftRequest(@NotBlank @Size(max=200) String title) {}
  public record VideoResponse(UUID id,String title,String status) {}
+ public record VideoDetails(UUID id,String title,String status,String youtubeVideoId,
+   String rejectionReason,java.time.Instant createdAt,java.time.Instant updatedAt) {}
+ @GetMapping("/videos/{id}")
+ @Transactional(readOnly=true)
+ public VideoDetails details(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
+    @PathVariable UUID id) {
+  VideoSubmission v=videos.findById(id)
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Video not found"));
+  if(!v.creator.cognitoSub.equals(jwt.getSubject()))
+   throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Video not found");
+  return new VideoDetails(v.id,v.title,v.status,v.youtubeVideoId,v.rejectionReason,v.createdAt,v.updatedAt);
+ }
  private VideoSubmission ownedDraft(Jwt jwt, UUID id) {
   VideoSubmission video=videos.findById(id)
     .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Draft not found"));
