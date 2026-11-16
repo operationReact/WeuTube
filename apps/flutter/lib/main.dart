@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'product_ui.dart';
+import 'product_ui.dart' show navy, coral, soft;
+import 'integrated_app.dart';
 
 void main() => runApp(const WeuTubeApp());
 
@@ -28,6 +29,6 @@ class WeuTubeApp extends StatelessWidget {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12))),
     ),
-    home: const WeuTubeProduct(),
+    home: const WeuTubeIntegratedApp(),
   );
 }
