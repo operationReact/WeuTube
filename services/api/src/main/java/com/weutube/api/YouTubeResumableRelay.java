@@ -94,6 +94,10 @@ public class YouTubeResumableRelay {
     return new Progress(total,true,uploaded.id());
    }
   }
+  if(status==401) {
+   tokens.invalidate(channelId);
+   throw new IllegalStateException("YouTube access token expired; retry after verification");
+  }
   if(status==404 || status==410)
    throw new IllegalStateException("Google resumable session expired; reconciliation required");
   throw new IllegalStateException("YouTube did not accept the upload request");
