@@ -9,6 +9,8 @@ public class VideoSubmission {
  @ManyToOne(optional=false) @JoinColumn(name="creator_id") public Creator creator;
  @Column(nullable=false,length=200) public String title;
  @Column(nullable=false,length=32) public String status;
+ @Column(name="youtube_video_id",length=128) public String youtubeVideoId;
+ @Column(name="rejection_reason") public String rejectionReason;
  @Column(name="created_at",nullable=false) public Instant createdAt;
  @Column(name="updated_at",nullable=false) public Instant updatedAt;
  protected VideoSubmission() {}
