@@ -130,6 +130,16 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     await navigate(target);
   }
 
+  void _reverifySignIn() {
+    api.clear();
+    setState(() {
+      error='';
+      afterLogin='Dashboard';
+      dashboardLoaded=false;
+      dashboardData={};
+      page='Sign In';
+    });
+  }
   Future<void> signIn() => perform(() async {
     if(!(form.currentState?.validate() ?? false)) return;
     final result=await api.login(email.text.trim(),password.text);
@@ -565,6 +575,11 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       const SizedBox(height: 12),
       button('Retry creator dashboard',_retryCurrentPage,
         icon:Icons.refresh_rounded),
+      if(error.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        button('Sign in again',_reverifySignIn,secondary:true,
+          icon:Icons.login_rounded),
+      ],
     ],
     if(dashboardLoaded) ...[
     const SizedBox(height:17),
