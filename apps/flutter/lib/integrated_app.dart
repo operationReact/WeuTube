@@ -308,8 +308,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
             final value = (raw ?? '').trim();
             if (value.isEmpty) return 'Enter ${label.toLowerCase()}';
             if (isEmail &&
-                !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+
-                  .hasMatch(value)) return 'Enter a valid email address';
+                !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value)) return 'Enter a valid email address';
             if (isName && value.length > 150) {
               return 'Name must be under 150 characters';
             }
