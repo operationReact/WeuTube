@@ -131,10 +131,11 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
   }
 
   void _reverifySignIn() {
+    final returnTo=nav.contains(page)?page:'Dashboard';
     api.clear();
     setState(() {
       error='';
-      afterLogin='Dashboard';
+      afterLogin=returnTo;
       dashboardLoaded=false;
       dashboardData={};
       page='Sign In';
@@ -216,7 +217,19 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       child:Container(width:double.infinity,padding:const EdgeInsets.all(12),
         decoration:BoxDecoration(color:coral.withValues(alpha:.09),
           borderRadius:BorderRadius.circular(10)),
-        child:Text(error,style:const TextStyle(color:navy,fontWeight:FontWeight.w600))));
+        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(error,style:const TextStyle(color:navy,fontWeight:FontWeight.w600)),
+          if(api.signedIn &&
+              (error.contains('Access denied') ||
+               error.contains('403') || error.contains('401') ||
+               error.contains('Session expired'))) ...[
+            const SizedBox(height:6),
+            TextButton.icon(
+              onPressed:_reverifySignIn,
+              icon:const Icon(Icons.login_rounded,size:18),
+              label:const Text('Sign in again')),
+          ],
+        ])));
   Widget statistic(String name,String value,IconData icon) => panel(Column(
     crossAxisAlignment:CrossAxisAlignment.start,children:[
       Icon(icon,color:coral),const SizedBox(height:12),
