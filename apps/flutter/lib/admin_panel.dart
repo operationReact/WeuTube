@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'backend_client.dart';
-import 'product_ui.dart' show navy, coral, soft, slate;
+import 'product_ui.dart' show navy, coral, slate;
 
 /// Production API-backed moderation and connected-channel management.
 /// The server, not this UI, enforces Cognito weutube-admin permissions.
