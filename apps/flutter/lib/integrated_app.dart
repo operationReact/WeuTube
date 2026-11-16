@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'backend_client.dart';
 import 'admin_panel.dart';
+import 'social_feed.dart';
 import 'product_ui.dart' show WeuTubeBrand, navy, coral, soft, slate, success;
 
 /// Responsive production API-connected creator experience for Android, iOS and web.
@@ -20,6 +21,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
   final form = GlobalKey<FormState>();
 
   String page = 'Home', challenge = '', challengeSession = '';
+  String afterLogin = 'Home';
   String videoFilter = 'All', selectedVideo = '';
   bool busy = false, showPassword = false;
   Map<String,dynamic> dashboardData = {}, walletData = {}, analyticsData = {}, profileData = {};
@@ -55,6 +57,11 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     finally {if(mounted) setState(() => busy=false);}
   }
   Future<void> navigate(String p) async {
+    if(!api.signedIn && (nav.contains(p) || p == 'Admin Operations')) {
+      afterLogin=p;
+      setState(() {page='Sign In';error='';});
+      return;
+    }
     setState(() {page=p;error='';});
     if(!api.signedIn || !nav.contains(p)) return;
     await perform(() async {
@@ -92,8 +99,8 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       challengeSession=result['session']?.toString()??'';
       setState(() => page='MFA');
     } else {
-      setState(() => page='Dashboard');
-      dashboardData=await api.dashboard();
+      await navigate(afterLogin);
+      afterLogin='Home';
     }
   });
   Future<void> signUp() => perform(() async {
@@ -280,7 +287,10 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
           if(mfa) button('Verify Code',()=>perform(() async {
             final r=await api.completeMfa(email.text.trim(),challengeSession,
               challenge,code.text.trim());
-            if(r['status']=='SIGNED_IN') await navigate('Dashboard');
+            if(r['status']=='SIGNED_IN') {
+              await navigate(afterLogin);
+              afterLogin='Home';
+            }
           })),
           const SizedBox(height:12),
           if(confirm) TextButton(onPressed:()=>perform(() async {
@@ -531,64 +541,96 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
         title:const Text('Sign Out'),onTap:signOut)
     ]));
 
+  static const socialPages = [
+    'Home', 'Explore', 'Shorts', 'Create', 'You', 'Saved', 'Following'
+  ];
+  static const authPages = [
+    'Sign In','Create Account','Confirm Email',
+    'Forgot Password','Reset Password','MFA'
+  ];
+
+  void createFromSocial() {
+    if(api.signedIn) {
+      navigate('Upload Video');
+    } else {
+      afterLogin='Upload Video';
+      navigate('Sign In');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final width=MediaQuery.sizeOf(context).width;
     final wide=width>=850;
-    final bottom=['Dashboard','Upload Video','My Videos','Wallet','Profile'];
-    final icons=[Icons.home_outlined,Icons.cloud_upload_outlined,
-      Icons.video_library_outlined,Icons.account_balance_wallet_outlined,Icons.person_outline];
+    final isSocial=socialPages.contains(page);
+    final isAuth=authPages.contains(page);
+    const tabs=['Home','Explore','Shorts','Create','You'];
+    const icons=[Icons.home_outlined,Icons.explore_outlined,
+      Icons.play_circle_outline_rounded,Icons.add_box_outlined,Icons.person_outline];
+    final selected=tabs.contains(page)?tabs.indexOf(page):4;
     return Scaffold(
-      drawer:api.signedIn&&!wide?Drawer(child:SafeArea(child:sideNav())):null,
+      drawer:api.signedIn&&!wide&&!isSocial
+        ?Drawer(child:SafeArea(child:sideNav())):null,
       body:SafeArea(child:Column(children:[
-        Container(height:68,padding:const EdgeInsets.symmetric(horizontal:15),
+        Container(height:66,padding:const EdgeInsets.symmetric(horizontal:15),
           decoration:const BoxDecoration(color:Colors.white,
             border:Border(bottom:BorderSide(color:Color(0xFFE9ECF3)))),
           child:Row(children:[
-            if(api.signedIn&&!wide)
+            if(api.signedIn&&!wide&&!isSocial)
               Builder(builder:(context)=>IconButton(
                 onPressed:()=>Scaffold.of(context).openDrawer(),
-                icon:const Icon(Icons.menu,color:navy))),
-            const WeuTubeBrand(size:21),const Spacer(),
-            if(!api.signedIn&&wide) ...[
-              TextButton(onPressed:()=>navigate('Home'),child:const Text('Home')),
-              const SizedBox(width:9),
-              button('Sign In',()=>navigate('Sign In'),secondary:true),
-              const SizedBox(width:8),
-              button('Create Account',()=>navigate('Create Account'))
-            ] else if(!api.signedIn)
+                icon:const Icon(Icons.menu_rounded,color:navy))),
+            InkWell(onTap:()=>navigate('Home'),
+              child:const WeuTubeBrand(size:22)),
+            const Spacer(),
+            if(!api.signedIn&&wide)
+              TextButton(onPressed:()=>navigate('Sign In'),
+                child:const Text('Sign In')),
+            if(!api.signedIn&&!wide)
               IconButton(onPressed:()=>navigate('Sign In'),
-                icon:const Icon(Icons.login,color:navy))
-            else ...[
-              if(api.showAdminMenu) IconButton(onPressed:()=>navigate('Admin Operations'),
-                icon:const Icon(Icons.admin_panel_settings_outlined,color:coral)),
+                icon:const Icon(Icons.login_rounded,color:navy)),
+            if(api.signedIn) ...[
+              if(api.showAdminMenu)
+                IconButton(onPressed:()=>navigate('Admin Operations'),
+                  icon:const Icon(Icons.admin_panel_settings_outlined,color:coral)),
               IconButton(onPressed:()=>navigate('Notifications'),
-                icon:const Icon(Icons.notifications_none,color:navy)),
-              IconButton(onPressed:()=>navigate('Profile'),
+                icon:const Icon(Icons.notifications_none_rounded,color:navy)),
+              IconButton(onPressed:()=>navigate('You'),
                 icon:const Icon(Icons.account_circle_outlined,color:navy)),
             ]
           ])),
-        if(busy) const LinearProgressIndicator(minHeight:3,color:coral),
+        if(busy)const LinearProgressIndicator(minHeight:3,color:coral),
         Expanded(child:Row(children:[
-          if(api.signedIn&&wide) sideNav(),
-          Expanded(child:SingleChildScrollView(
-            padding:EdgeInsets.all(width<520?15:25),
-            child:Center(child:ConstrainedBox(
-              constraints:const BoxConstraints(maxWidth:1050),
-              child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                banner(),content(wide?width-290:width-35),
-                const SizedBox(height:40)
-              ])))))
+          if(api.signedIn&&wide&&!isSocial)sideNav(),
+          Expanded(child:isSocial
+            ?Center(child:ConstrainedBox(
+                constraints:const BoxConstraints(maxWidth:620),
+                child:SocialHub(
+                  api:api,
+                  section:page,
+                  onNavigate:navigate,
+                  onSignIn:(){
+                    afterLogin='You';
+                    navigate('Sign In');
+                  },
+                  onCreate:createFromSocial,
+                  onStudio:()=>navigate('Dashboard'))))
+            :SingleChildScrollView(
+              padding:EdgeInsets.all(width<520?15:25),
+              child:Center(child:ConstrainedBox(
+                constraints:const BoxConstraints(maxWidth:1050),
+                child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  banner(),content(wide?width-290:width-35),
+                  const SizedBox(height:40)
+                ])))))
         ]))
       ])),
-      bottomNavigationBar:api.signedIn&&!wide?NavigationBar(
-        height:69,
-        selectedIndex:bottom.contains(page)?bottom.indexOf(page):0,
-        onDestinationSelected:(i)=>navigate(bottom[i]),
+      bottomNavigationBar:!isAuth?NavigationBar(
+        height:68,selectedIndex:selected,
+        onDestinationSelected:(i)=>navigate(tabs[i]),
         destinations:[
-          for(int i=0;i<bottom.length;i++)
-            NavigationDestination(icon:Icon(icons[i]),
-              label:['Home','Upload','Videos','Wallet','Profile'][i])
+          for(int i=0;i<tabs.length;i++)
+            NavigationDestination(icon:Icon(icons[i]),label:tabs[i])
         ]):null
     );
   }
