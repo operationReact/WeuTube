@@ -179,9 +179,24 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body:
       WeuTubeUploadComposer(api: api, onSignIn: () {}, onViewVideos: () {}))));
     await tester.pumpAndSettle();
-    expect(find.text('Channel permissions unavailable'), findsOneWidget);
-    expect(find.textContaining('Your account cannot access'), findsOneWidget);
+    expect(find.text('Sign-in verification failed'), findsOneWidget);
+    expect(find.text('Sign in again'), findsOneWidget);
+    expect(find.textContaining('rejected by the API'), findsOneWidget);
     expect(find.byKey(const ValueKey('upload-video-title')), findsNothing);
+    api.dispose();
+  });
+
+  testWidgets('Channel API 403 is distinguished from valid Cognito login',
+      (tester) async {
+    final api=_ComposerFakeApi([
+      {'channelId':'UC_Example_123','displayName':'Authorized channel'},
+    ], channelDenied:true);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      WeuTubeUploadComposer(api:api,onSignIn:(){},onViewVideos:(){}))));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign-in verification failed'),findsOneWidget);
+    expect(find.textContaining('Your sign-in is valid'),findsOneWidget);
+    expect(find.byKey(const ValueKey('upload-video-title')),findsNothing);
     api.dispose();
   });
 
@@ -204,14 +219,26 @@ void main() {
 }
 
 class _ComposerFakeApi extends WeuTubeApi {
-  _ComposerFakeApi(this.channels, {this.denied = false}) {
+  _ComposerFakeApi(this.channels, {this.denied = false,
+      this.channelDenied = false}) {
     accessToken = 'test-token';
   }
   final List<Map<String,dynamic>> channels;
   final bool denied;
+  final bool channelDenied;
+  @override
+  Future<Map<String,dynamic>> creatorSession() async {
+    if (denied) throw const ApiFailure('Access denied.',403);
+    return {
+      'authenticated': true,
+      'uploadAccess': channels.isEmpty ? 'NO_CHANNEL_GRANT' : 'READY',
+      'channelGranted': channels.isNotEmpty,
+      'channelConnected': channels.isNotEmpty,
+    };
+  }
   @override
   Future<List<Map<String,dynamic>>> grantedChannels() async {
-    if (denied) throw const ApiFailure('Access denied.',403);
+    if (denied || channelDenied) throw const ApiFailure('Access denied.',403);
     return channels;
   }
 }

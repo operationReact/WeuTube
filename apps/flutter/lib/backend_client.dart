@@ -123,6 +123,10 @@ class WeuTubeApi {
     try {if(signedIn) await call('POST','/api/auth/sign-out',retry:false);}
     finally {clear();}
   }
+  /// Validates the Cognito bearer token independently of YouTube grants.
+  /// An authenticated account with no channel should receive 200, not 403.
+  Future<Map<String,dynamic>> creatorSession() async =>
+    asMap(await call('GET','/api/creator/session'));
   Future<Map<String,dynamic>> dashboard() async => asMap(await call('GET','/api/creator/dashboard'));
   Future<List<Map<String,dynamic>>> grantedChannels() => list('/api/creator/channels');
   Future<List<Map<String,dynamic>>> videos() => list('/api/creator/videos');
