@@ -269,33 +269,6 @@ class _SocialHubState extends State<SocialHub> {
       color:Colors.white,borderRadius:BorderRadius.circular(21),
       border:Border.all(color:const Color(0xFFEDF0F6))),
       child:child);
-  Widget thumbnail(Map<String,dynamic> item,{double? height,
-      BorderRadius? radius}) {
-    return ClipRRect(borderRadius:radius ?? BorderRadius.circular(17),
-      child:Stack(fit:StackFit.expand,children:[
-        Container(color:navy.withValues(alpha:.13),
-          child:Image.network(image(item),fit:BoxFit.cover,
-            errorBuilder:(_,__,___)=>Container(
-              decoration:const BoxDecoration(gradient:LinearGradient(
-                colors:[Color(0xFF13295C),Color(0xFF4E6A94)])),
-              child:const Center(child:Icon(Icons.landscape_outlined,
-                color:Colors.white,size:62))))),
-        Container(decoration:BoxDecoration(gradient:LinearGradient(
-          begin:Alignment.topCenter,end:Alignment.bottomCenter,
-          colors:[Colors.transparent,Colors.black.withValues(alpha:.34)]))),
-        Center(child:Container(padding:const EdgeInsets.all(12),
-          decoration:BoxDecoration(color:Colors.white.withValues(alpha:.94),
-            borderRadius:BorderRadius.circular(100)),
-          child:const Icon(Icons.play_arrow_rounded,color:coral,size:28))),
-        Positioned(bottom:10,right:10,child:Container(
-          padding:const EdgeInsets.symmetric(horizontal:7,vertical:4),
-          decoration:BoxDecoration(color:Colors.black.withValues(alpha:.72),
-            borderRadius:BorderRadius.circular(7)),
-          child:Text(str(item['duration']),style:const TextStyle(
-            color:Colors.white,fontSize:10,fontWeight:FontWeight.w700))))
-      ]));
-  }
-
   Widget actionIcon(IconData icon,String label,VoidCallback tap,
       {bool active=false}) =>
     InkWell(onTap:tap,borderRadius:BorderRadius.circular(20),
