@@ -187,8 +187,13 @@ class WeuTubeApi {
   }
   Future<void> followCreator(String id,bool on) async =>
     call(on?'PUT':'DELETE','/api/social/creators/'+Uri.encodeComponent(id)+'/follow');
-  Future<List<Map<String,dynamic>>> comments(String videoId) =>
-    list('/api/social/videos/'+Uri.encodeComponent(videoId)+'/comments');
+  Future<List<Map<String,dynamic>>> comments(String videoId) async {
+    // Published comments are public; writing still requires Cognito login.
+    final result=await call('GET',
+      '/api/social/videos/'+Uri.encodeComponent(videoId)+'/comments',auth:false);
+    return (result is List ? result : <dynamic>[])
+      .whereType<Map<String,dynamic>>().toList();
+  }
   Future<Map<String,dynamic>> postComment(String videoId,String message) async =>
     asMap(await call('POST','/api/social/videos/'+Uri.encodeComponent(videoId)+'/comments',
       data:{'text':message}));
