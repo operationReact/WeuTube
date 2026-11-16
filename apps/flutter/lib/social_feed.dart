@@ -472,96 +472,114 @@ class _SocialHubState extends State<SocialHub> {
       ]));
 
   Widget stories() {
-    final tops=items.take(5).toList();
-    return SizedBox(height:91,child:ListView(
-      scrollDirection:Axis.horizontal,children:[
-        Padding(padding:const EdgeInsets.only(right:14),
-          child:GestureDetector(onTap:widget.onCreate,
+    final seen=<String>{};
+    final unique=items.where((p)=>seen.add(followKey(p))).take(9).toList();
+    return SizedBox(height:85,child:ListView(scrollDirection:Axis.horizontal,
+      padding:const EdgeInsets.symmetric(horizontal:12),
+      children:[
+        Padding(padding:const EdgeInsets.only(right:16),
+          child:InkWell(onTap:widget.onCreate,
+            borderRadius:BorderRadius.circular(15),
             child:Column(children:[
-              CircleAvatar(radius:29,backgroundColor:coral.withValues(alpha:.1),
-                child:const Icon(Icons.add_rounded,color:coral)),
-              const SizedBox(height:5),
-              const Text('Your story',style:TextStyle(color:navy,fontSize:11))
+              Container(width:48,height:48,
+                decoration:BoxDecoration(
+                  color:coral.withValues(alpha:.10),shape:BoxShape.circle,
+                  border:Border.all(color:coral.withValues(alpha:.25))),
+                child:const Icon(Icons.add_rounded,color:coral,size:24)),
+              const SizedBox(height:4),
+              const Text('Your video',style:TextStyle(
+                color:slate,fontSize:10,fontWeight:FontWeight.w700))
             ]))),
-        for(final item in tops) Padding(padding:const EdgeInsets.only(right:14),
-          child:GestureDetector(onTap:()=>play(item),child:Column(children:[
-            Container(width:62,height:62,padding:const EdgeInsets.all(3),
-              decoration:BoxDecoration(shape:BoxShape.circle,
-                border:Border.all(color:coral,width:2)),
-              child:ClipOval(child:Image.network(image(item),fit:BoxFit.cover,
-                errorBuilder:(_,__,___)=>const ColoredBox(color:soft,
-                  child:Icon(Icons.person_outline,color:navy))))),
-            const SizedBox(height:4),
-            Text(str(item['category']),style:const TextStyle(
-              color:navy,fontSize:10))
-          ])))
+        for(final item in unique)
+          Padding(padding:const EdgeInsets.only(right:16),
+            child:InkWell(onTap:()=>play(item),
+              borderRadius:BorderRadius.circular(15),
+              child:Column(children:[
+                CreatorPortrait(name:str(item['creator']),
+                  imageUrl:avatar(item),radius:23,highlighted:true),
+                const SizedBox(height:4),
+                SizedBox(width:58,child:Text(
+                  str(item['creator']).split(' ').first,
+                  maxLines:1,overflow:TextOverflow.ellipsis,
+                  textAlign:TextAlign.center,
+                  style:const TextStyle(color:navy,fontSize:10,
+                    fontWeight:FontWeight.w700)))
+              ])))
       ]));
   }
 
   Widget home() {
-    List<Map<String,dynamic>> list=List.from(items);
+    List<Map<String,dynamic>> feed=List.of(items);
     if(feedChoice=='Following') {
-      list=list.where((item)=>following.contains(
-        str(item['creatorId']).isEmpty ? str(item['creator']) : str(item['creatorId']))).toList();
+      feed=feed.where((post)=>following.contains(followKey(post))).toList();
     } else if(feedChoice=='Fresh') {
-      list=list.reversed.toList();
+      feed=feed.reversed.toList();
     }
-    return RefreshIndicator(color:coral,onRefresh:refresh,
-      child:ListView(padding:const EdgeInsets.fromLTRB(17,16,17,24),children:[
-        Row(children:[
-          const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
-            children:[
-              Text('YOUR CORNER OF THE INTERNET',style:TextStyle(
-                color:coral,fontWeight:FontWeight.w800,fontSize:10,letterSpacing:1)),
-              SizedBox(height:5),
-              Text('Find your next spark.',style:TextStyle(
-                color:navy,fontSize:25,fontWeight:FontWeight.w900))
-            ])),
-          IconButton(onPressed:refresh,icon:const Icon(Icons.refresh_rounded,color:navy))
-        ]),
-        const SizedBox(height:12),
-        if(loadError!=null) Padding(padding:const EdgeInsets.only(bottom:8),
-          child:Text(loadError!,style:const TextStyle(color:slate,fontSize:11))),
-        Wrap(spacing:8,children:[
-          for(final option in ['For you','Following','Fresh'])
-            ChoiceChip(label:Text(option),selected:feedChoice==option,
-              selectedColor:coral.withValues(alpha:.14),
-              onSelected:(_)=>setState(()=>feedChoice=option))
-        ]),
-        sectionTitle('Your circle',trailing:'Discover',onTap:()=>widget.onNavigate('Explore')),
-        stories(),
-        const SizedBox(height:12),
-        GestureDetector(onTap:()=>play(items.first),
-          child:Container(height:126,clipBehavior:Clip.antiAlias,
-            decoration:BoxDecoration(color:navy,
-              borderRadius:BorderRadius.circular(20)),
-            child:Stack(children:[
-              Positioned.fill(child:Opacity(opacity:.35,
-                child:Image.network(image(items.first),fit:BoxFit.cover,
-                  errorBuilder:(_,__,___)=>const SizedBox.shrink()))),
-              const Positioned(left:17,top:19,child:Column(
-                crossAxisAlignment:CrossAxisAlignment.start,children:[
-                  Text("TODAY'S SPARK",style:TextStyle(
-                    color:Color(0xFFFFB7AB),fontSize:10,fontWeight:FontWeight.w900)),
-                  SizedBox(height:8),
-                  Text('Stories that take\nyou places.',style:TextStyle(
-                    color:Colors.white,fontWeight:FontWeight.w900,fontSize:20)),
-                ])),
-              const Positioned(right:22,bottom:23,
-                child:Icon(Icons.play_circle_fill_rounded,color:Colors.white,size:44)),
-            ]))),
-        sectionTitle('Fresh from the community',
-          trailing:loading?'Loading…':null),
-        if(list.isEmpty) Padding(padding:const EdgeInsets.symmetric(vertical:24),
-          child:Column(children:[
-            const Text('Your following feed is getting started.',
-              style:TextStyle(color:slate)),
-            const SizedBox(height:10),
-            TextButton(onPressed:()=>setState(()=>feedChoice='For you'),
-              child:const Text('Explore all stories'))
-          ])),
-        for(final item in list)postCard(item)
-      ]));
+    return Column(children:[
+      Container(color:Colors.white,
+        padding:const EdgeInsets.fromLTRB(15,5,10,5),
+        child:Row(children:[
+          for(final choice in ['For you','Following','Fresh'])
+            Padding(padding:const EdgeInsets.only(right:13),
+              child:InkWell(onTap:(){
+                setState((){feedChoice=choice;homeIndex=0;});
+                WidgetsBinding.instance.addPostFrameCallback((_){
+                  if(homePager.hasClients)homePager.jumpToPage(0);
+                });
+              },child:Column(mainAxisSize:MainAxisSize.min,children:[
+                Padding(padding:const EdgeInsets.symmetric(horizontal:2,vertical:6),
+                  child:Text(choice,style:TextStyle(
+                    color:choice==feedChoice?navy:slate,
+                    fontSize:choice==feedChoice?16:14,
+                    fontWeight:choice==feedChoice?FontWeight.w900:FontWeight.w600))),
+                AnimatedContainer(duration:const Duration(milliseconds:200),
+                  width:choice==feedChoice?28:0,height:3,
+                  decoration:BoxDecoration(color:coral,
+                    borderRadius:BorderRadius.circular(4)))
+              ]))),
+          const Spacer(),
+          IconButton(onPressed:()=>widget.onNavigate('Explore'),
+            tooltip:'Search creators and topics',
+            icon:const Icon(Icons.search_rounded,color:navy,size:25)),
+          IconButton(onPressed:refresh,
+            tooltip:'Refresh feed',icon:const Icon(Icons.refresh_rounded,color:slate))
+        ])),
+      Container(color:Colors.white,
+        alignment:Alignment.centerLeft,
+        padding:const EdgeInsets.fromLTRB(14,8,12,5),
+        child:Row(children:[
+          const Expanded(child:Text('Creators worth discovering',
+            style:TextStyle(color:navy,fontSize:12,fontWeight:FontWeight.w900))),
+          InkWell(onTap:()=>widget.onNavigate('Explore'),
+            child:const Text('See all',style:TextStyle(
+              color:coral,fontSize:11,fontWeight:FontWeight.w800)))
+        ])),
+      ColoredBox(color:Colors.white,child:stories()),
+      if(loadError!=null)
+        Container(width:double.infinity,
+          padding:const EdgeInsets.symmetric(horizontal:12,vertical:4),
+          color:const Color(0xFFFFF4F1),
+          child:Text(loadError!,style:const TextStyle(color:navy,fontSize:10))),
+      Expanded(child:feed.isEmpty
+        ?Center(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          const Icon(Icons.people_outline_rounded,color:coral,size:45),
+          const SizedBox(height:10),
+          const Text('Your circle starts here',
+            style:TextStyle(color:navy,fontWeight:FontWeight.w900,fontSize:19)),
+          const SizedBox(height:7),
+          const Text('Follow a creator and their stories will appear here.',
+            style:TextStyle(color:slate,fontSize:12)),
+          TextButton(onPressed:()=>widget.onNavigate('Explore'),
+            child:const Text('Discover creators'))
+        ]))
+        :PageView.builder(
+          key:ValueKey('feed-$feedChoice'),
+          controller:homePager,
+          scrollDirection:Axis.vertical,
+          onPageChanged:(i)=>setState(()=>homeIndex=i),
+          itemCount:feed.length,
+          itemBuilder:(context,index)=>immersivePost(feed[index],index))),
+    ]);
   }
 
   Widget explore() {
