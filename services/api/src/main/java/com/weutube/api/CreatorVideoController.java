@@ -18,8 +18,8 @@ public class CreatorVideoController {
  public CreatorVideoController(CreatorRepository creators,VideoRepository videos) {
   this.creators=creators; this.videos=videos;
  }
- public record DraftRequest(@NotBlank @Size(max=100) String title) {}
- public record DraftMetadata(@NotBlank @Size(max=100) String title,
+ public record DraftRequest(@NotBlank String title) {}
+ public record DraftMetadata(@NotBlank String title,
    @Size(max=5000) String description,@NotBlank @Size(max=50) String category) {}
  private static final java.util.Set<String> CATEGORIES=java.util.Set.of(
    "Travel","Art","Lifestyle","Storytelling","Education","Entertainment",
