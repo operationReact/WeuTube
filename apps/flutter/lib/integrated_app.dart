@@ -835,11 +835,12 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                 onPressed:()=>Scaffold.of(context).openDrawer(),
                 icon:const Icon(Icons.menu_rounded,color:navy))),
             Flexible(fit: FlexFit.loose,
-              child: InkWell(onTap:()=>navigate('Home'),
-                child:const FittedBox(
-                  alignment: Alignment.centerLeft,
-                  fit: BoxFit.scaleDown,
-                  child: WeuTubeBrand(size:22)))),
+              child: SizedBox(width:width<360?175:220,
+                child: InkWell(onTap:()=>navigate('Home'),
+                  child:const FittedBox(
+                    alignment: Alignment.centerLeft,
+                    fit: BoxFit.scaleDown,
+                    child: WeuTubeBrand(size:22))))),
             const Spacer(),
             if(!api.signedIn&&wide&&!isAuth)
               TextButton(onPressed:()=>navigate('Sign In'),
