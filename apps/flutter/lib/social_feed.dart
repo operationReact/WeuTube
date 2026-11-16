@@ -3,6 +3,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import 'backend_client.dart';
+import 'social_demo_data.dart';
+import 'social_design_widgets.dart';
 import 'product_ui.dart' show navy, coral, soft, slate, success;
 
 /// A filled, mobile-first social experience. Public demo content is explicitly
@@ -29,58 +31,20 @@ class SocialHub extends StatefulWidget {
 }
 
 class _SocialHubState extends State<SocialHub> {
-  static final demo = <Map<String, dynamic>>[
-    {
-      'id': 'demo-mountains', 'title': 'A weekend above the clouds',
-      'creator': 'WeuTube Preview', 'handle': '@weutube.preview',
-      'category': 'Travel', 'description': 'A little mountain air and a sunrise worth remembering.',
-      'thumbnailUrl': 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=900&q=82',
-      'videoUrl': 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-      'views': 24800, 'likes': 2310, 'comments': 12, 'demo': true, 'duration': '0:15'
-    },
-    {
-      'id': 'demo-ocean', 'title': 'The island nobody told me about',
-      'creator': 'WeuTube Preview', 'handle': '@weutube.preview',
-      'category': 'Travel', 'description': 'Hidden shorelines and a new adventure.',
-      'thumbnailUrl': 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?w=900&q=82',
-      'videoUrl': 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-      'views': 56200, 'likes': 4821, 'comments': 21, 'demo': true, 'duration': '0:15'
-    },
-    {
-      'id': 'demo-city', 'title': 'Finding beauty after dark',
-      'creator': 'WeuTube Preview', 'handle': '@weutube.preview',
-      'category': 'Art', 'description': 'Night lights, new angles and spontaneous stories.',
-      'thumbnailUrl': 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900&q=82',
-      'videoUrl': 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-      'views': 32400, 'likes': 1937, 'comments': 18, 'demo': true, 'duration': '0:15'
-    },
-    {
-      'id': 'demo-road', 'title': 'The road to nowhere (and everywhere)',
-      'creator': 'WeuTube Preview', 'handle': '@weutube.preview',
-      'category': 'Lifestyle', 'description': 'The little moments make the journey.',
-      'thumbnailUrl': 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?w=900&q=82',
-      'videoUrl': 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      'views': 18200, 'likes': 824, 'comments': 5, 'demo': true, 'duration': '0:15'
-    },
-    {
-      'id': 'demo-story', 'title': 'Stories around the campfire',
-      'creator': 'WeuTube Preview', 'handle': '@weutube.preview',
-      'category': 'Storytelling', 'description': 'A quieter world, a few good stories.',
-      'thumbnailUrl': 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=900&q=82',
-      'videoUrl': 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      'views': 8100, 'likes': 556, 'comments': 7, 'demo': true, 'duration': '9:56'
-    },
-  ];
+  static const demo = socialDemoPosts;
   final Set<String> liked = {}, saved = {}, following = {};
   final Map<String, List<String>> draftComments = {};
   final search = TextEditingController();
   final PageController shortsPager = PageController();
+  final PageController homePager = PageController();
   List<Map<String, dynamic>> items = List.from(demo);
   bool loading = false;
   String category = 'All';
   String feedChoice = 'For you';
   String? loadError;
   int shortIndex = 0;
+  int homeIndex = 0;
+  bool showQuickHeart = false;
 
   @override
   void initState() {
@@ -91,6 +55,7 @@ class _SocialHubState extends State<SocialHub> {
   @override
   void dispose() {
     shortsPager.dispose();
+    homePager.dispose();
     search.dispose();
     super.dispose();
   }
@@ -99,6 +64,16 @@ class _SocialHubState extends State<SocialHub> {
   String str(dynamic value) => value?.toString() ?? '';
   String id(Map<String, dynamic> item) => str(item['id']);
   String image(Map<String, dynamic> item) => str(item['thumbnailUrl']);
+  String avatar(Map<String, dynamic> item) => str(item['avatarUrl']);
+  String followKey(Map<String,dynamic> item) =>
+    str(item['creatorId']).isEmpty ? str(item['creator']) : str(item['creatorId']);
+  void doubleTapLike(Map<String,dynamic> item) {
+    if(!liked.contains(id(item)))like(item);
+    setState(()=>showQuickHeart=true);
+    Future<void>.delayed(const Duration(milliseconds:550),(){
+      if(mounted)setState(()=>showQuickHeart=false);
+    });
+  }
   String compact(dynamic raw) {
     final num? value = raw is num ? raw : num.tryParse(str(raw));
     if(value == null) return '—';
