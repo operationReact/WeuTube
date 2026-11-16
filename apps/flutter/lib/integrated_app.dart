@@ -844,7 +844,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
             if(!api.signedIn&&wide&&!isAuth)
               TextButton(onPressed:()=>navigate('Sign In'),
                 child:const Text('Sign In')),
-            if(isSocial)
+            if(isSocial && page!='Explore')
               IconButton(onPressed:()=>navigate('Explore'),
                 tooltip:'Search creators and videos',
                 icon:const Icon(Icons.search_rounded,color:navy)),
