@@ -16,6 +16,7 @@ class WeuTubeIntegratedApp extends StatefulWidget {
 class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
   final api = WeuTubeApi();
   final email = TextEditingController(), password = TextEditingController();
+  final confirmPassword = TextEditingController();
   final fullName = TextEditingController(), code = TextEditingController();
   final title = TextEditingController(), channelId = TextEditingController();
   final videoDescription = TextEditingController();
@@ -41,7 +42,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
 
   @override
   void dispose() {
-    for(final input in [email,password,fullName,code,title,channelId,displayName,videoDescription]) {
+    for(final input in [email,password,confirmPassword,fullName,code,title,channelId,displayName,videoDescription]) {
       input.dispose();
     }
     api.dispose();
@@ -65,6 +66,12 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       afterLogin=p;
       setState(() {page='Sign In';error='';});
       return;
+    }
+    // Clear passwords on authentication mode changes.
+    if (authPages.contains(page) && page != p) {
+      password.clear();
+      confirmPassword.clear();
+      showPassword = false;
     }
     setState(() {page=p;error='';});
     if(!api.signedIn || !nav.contains(p)) return;
@@ -118,6 +125,9 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     if(password.text.length<12) throw const ApiFailure('Password needs at least 12 characters.');
     final result=await api.signUp(fullName.text.trim(),email.text.trim(),password.text);
     if(!mounted) return;
+    password.clear();
+    confirmPassword.clear();
+    showPassword = false;
     setState(() => page=result['status']=='CONFIRMED'?'Sign In':'Confirm Email');
     message(result['status']=='CONFIRMED'?'Account created. Sign in.':'Enter the verification code emailed by Cognito.');
   });
@@ -254,61 +264,271 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     ]);
   }
 
+  /// Shared compact authentication input: the previous generic dashboard
+  /// fields were 80+ px high with floating outline labels on mobile.
+  Widget authInput(
+    String label,
+    TextEditingController controller, {
+    bool isEmail = false,
+    bool isName = false,
+    bool isPassword = false,
+    bool isCode = false,
+    bool newPassword = false,
+    bool confirmPasswordField = false,
+    TextInputAction action = TextInputAction.next,
+    VoidCallback? onSubmitted,
+  }) {
+    final secret = isPassword && !showPassword;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(
+          color: navy, fontSize: 13, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 7),
+        TextFormField(
+          key: ValueKey('auth-${label.toLowerCase().replaceAll(' ', '-')}'),
+          controller: controller,
+          keyboardType: isEmail ? TextInputType.emailAddress
+            : isCode ? TextInputType.number : TextInputType.text,
+          textCapitalization: isName ? TextCapitalization.words
+            : TextCapitalization.none,
+          textInputAction: action,
+          autofillHints: isEmail
+            ? const [AutofillHints.username, AutofillHints.email]
+            : isName ? const [AutofillHints.name]
+            : isPassword ? [newPassword
+              ? AutofillHints.newPassword : AutofillHints.password]
+            : isCode ? const [AutofillHints.oneTimeCode] : null,
+          autocorrect: isName,
+          enableSuggestions: !isPassword,
+          obscureText: secret,
+          maxLines: 1,
+          onFieldSubmitted: (_) => onSubmitted?.call(),
+          validator: (raw) {
+            final value = (raw ?? '').trim();
+            if (value.isEmpty) return 'Enter ${label.toLowerCase()}';
+            if (isEmail &&
+                !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value)) return 'Enter a valid email address';
+            if (isName && value.length > 150) {
+              return 'Name must be under 150 characters';
+            }
+            if (newPassword && (raw ?? '').length < 12) {
+              return 'Use at least 12 characters';
+            }
+            if (confirmPasswordField && raw != password.text) {
+              return 'Passwords do not match';
+            }
+            return null;
+          },
+          style: const TextStyle(color: navy, fontSize: 15),
+          decoration: InputDecoration(
+            hintText: isName ? 'Your full name'
+              : isEmail ? 'you@example.com'
+              : isCode ? 'Enter verification code'
+              : isPassword ? 'Enter your password' : null,
+            hintStyle: const TextStyle(
+              color: Color(0xFF8A92A1), fontSize: 14),
+            filled: true,
+            fillColor: const Color(0xFFFAFBFD),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 15, vertical: 15),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: const BorderSide(color: Color(0xFFDCE2EC))),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: const BorderSide(color: Color(0xFFDCE2EC))),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: const BorderSide(color: navy, width: 1.5)),
+            suffixIcon: isPassword ? IconButton(
+              tooltip: showPassword ? 'Hide password' : 'Show password',
+              onPressed: () => setState(() => showPassword = !showPassword),
+              icon: Icon(showPassword
+                ? Icons.visibility_off_outlined
+                : Icons.visibility_outlined,
+                size: 21, color: slate)) : null,
+          ),
+        ),
+      ]),
+    );
+  }
+
   Widget auth() {
-    final signup=page=='Create Account';
-    final confirm=page=='Confirm Email';
-    final forgot=page=='Forgot Password';
-    final reset=page=='Reset Password';
-    final mfa=page=='MFA';
-    final signInPage=page=='Sign In';
-    String titleText=signup?'Create Account':confirm?'Verify Your Email':
-      forgot?'Forgot Password':reset?'Reset Password':mfa?'Confirm Security Code':'Welcome Back';
-    return Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:460),
-      child:panel(Form(key:form,child:Column(
-        crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          const Center(child:WeuTubeBrand(size:28)),
-          const SizedBox(height:24),heading(titleText,'Secure WeuTube creator account'),
-          const SizedBox(height:24),
-          if(signup) field('Full Name',fullName),
-          if(!reset&&!mfa) field('Email Address',email),
-          if(signInPage||signup) field('Password',password,secret:true),
-          if(confirm||reset||mfa) field('Verification Code',code),
-          if(reset) field('New Password',password,secret:true),
-          if(signInPage) Align(alignment:Alignment.centerRight,
-            child:TextButton(onPressed:()=>navigate('Forgot Password'),
-              child:const Text('Forgot password?'))),
-          if(signInPage) button('Sign In',signIn),
-          if(signup) button('Create Account',signUp),
-          if(confirm) button('Confirm Email',()=>perform(() async {
-            await api.confirm(email.text.trim(),code.text.trim());
-            code.clear();await navigate('Sign In');
+    final signup = page == 'Create Account';
+    final confirm = page == 'Confirm Email';
+    final forgot = page == 'Forgot Password';
+    final reset = page == 'Reset Password';
+    final mfa = page == 'MFA';
+    final signInPage = page == 'Sign In';
+    final mobile = MediaQuery.sizeOf(context).width < 650;
+    final title = signup ? 'Create Account'
+      : confirm ? 'Verify Your Email'
+      : forgot ? 'Forgot Password'
+      : reset ? 'Reset Password'
+      : mfa ? 'Confirm Security Code' : 'Welcome Back';
+    final subtitle = signup
+      ? 'Join the community. Watch, share and create.'
+      : confirm ? 'Enter the code sent to your email.'
+      : forgot ? 'We will send a reset code to your email.'
+      : reset ? 'Choose a new password for your account.'
+      : mfa ? 'Enter the security code to continue.'
+      : 'Sign in to continue your WeuTube experience.';
+
+    Widget authAction(String label, VoidCallback callback) =>
+      SizedBox(width: double.infinity, height: 52,
+        child: FilledButton(
+          onPressed: busy ? null : callback,
+          style: FilledButton.styleFrom(
+            backgroundColor: coral,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(13))),
+          child: busy
+            ? const SizedBox(width: 19, height: 19,
+                child: CircularProgressIndicator(
+                  color: Colors.white, strokeWidth: 2))
+            : Text(label, style: const TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w800))));
+
+    final fields = Form(
+      key: form,
+      child: AutofillGroup(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(title, style: const TextStyle(
+            color: navy, fontSize: 29, height: 1.15,
+            fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text(subtitle, style: const TextStyle(
+            color: slate, fontSize: 14, height: 1.45)),
+          const SizedBox(height: 25),
+          if(signup) authInput('Full Name', fullName, isName: true),
+          if(!reset && !mfa)
+            authInput('Email Address', email, isEmail: true),
+          if(signInPage)
+            authInput('Password', password, isPassword: true,
+              action: TextInputAction.done, onSubmitted: signIn),
+          if(signup) ...[
+            authInput('Password', password, isPassword: true,
+              newPassword: true),
+            authInput('Confirm Password', confirmPassword,
+              isPassword: true, confirmPasswordField: true,
+              action: TextInputAction.done, onSubmitted: signUp),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text('Use at least 12 characters for your password.',
+                style: TextStyle(color: slate, fontSize: 12))),
+          ],
+          if(confirm || reset || mfa)
+            authInput('Verification Code', code, isCode: true,
+              action: reset ? TextInputAction.next : TextInputAction.done),
+          if(reset) ...[
+            authInput('New Password', password, isPassword: true,
+              newPassword: true, action: TextInputAction.done),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text('Use at least 12 characters.',
+                style: TextStyle(color: slate, fontSize: 12))),
+          ],
+          if(signInPage) Align(alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: busy ? null : () => navigate('Forgot Password'),
+              child: const Text('Forgot password?',
+                style: TextStyle(color: navy,
+                  fontSize: 13, fontWeight: FontWeight.w700)))),
+          if(error.isNotEmpty) Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF2EE),
+              borderRadius: BorderRadius.circular(12)),
+            child: Row(children: [
+              const Icon(Icons.error_outline, color: coral, size: 19),
+              const SizedBox(width: 9),
+              Expanded(child: Text(error, style: const TextStyle(
+                color: navy, fontSize: 12))),
+            ])),
+          const SizedBox(height: 7),
+          if(signInPage) authAction('Sign In', signIn),
+          if(signup) authAction('Create Account', signUp),
+          if(confirm) authAction('Confirm Email', () => perform(() async {
+            if(!(form.currentState?.validate() ?? false)) return;
+            await api.confirm(email.text.trim(), code.text.trim());
+            code.clear();
+            await navigate('Sign In');
             message('Email confirmed. Please sign in.');
           })),
-          if(forgot) button('Send Reset Code',()=>perform(() async {
+          if(forgot) authAction('Send Reset Code', () => perform(() async {
+            if(!(form.currentState?.validate() ?? false)) return;
             await api.forgot(email.text.trim());
             await navigate('Reset Password');
             message('If the account exists, a reset code has been sent.');
           })),
-          if(reset) button('Update Password',()=>perform(() async {
+          if(reset) authAction('Update Password', () => perform(() async {
+            if(!(form.currentState?.validate() ?? false)) return;
             await api.reset(email.text.trim(),code.text.trim(),password.text);
-            password.clear();code.clear();
-            await navigate('Sign In');message('Password updated.');
+            password.clear();
+            code.clear();
+            await navigate('Sign In');
+            message('Password updated.');
           })),
-          if(mfa) button('Verify Code',()=>perform(() async {
-            final r=await api.completeMfa(email.text.trim(),challengeSession,
-              challenge,code.text.trim());
-            if(r['status']=='SIGNED_IN') {
+          if(mfa) authAction('Verify Code', () => perform(() async {
+            if(!(form.currentState?.validate() ?? false)) return;
+            final result = await api.completeMfa(email.text.trim(),
+              challengeSession, challenge, code.text.trim());
+            if(result['status'] == 'SIGNED_IN') {
+              password.clear();
               await navigate(afterLogin);
-              afterLogin='Home';
+              afterLogin = 'Home';
             }
           })),
-          const SizedBox(height:12),
-          if(confirm) TextButton(onPressed:()=>perform(() async {
-            await api.resend(email.text.trim());message('A new code was requested.');
-          }),child:const Text('Resend verification code')),
-          TextButton(onPressed:()=>navigate(signup?'Sign In':'Create Account'),
-            child:Text(signup?'Already registered? Sign In':'New creator? Create Account'))
-        ])))));
+          if(confirm) Padding(
+            padding: const EdgeInsets.only(top: 9),
+            child: TextButton(
+              onPressed: busy ? null : () => perform(() async {
+                await api.resend(email.text.trim());
+                message('A new code was requested.');
+              }),
+              child: const Text('Resend verification code'))),
+          const SizedBox(height: 18),
+          Center(child: TextButton(
+            onPressed: busy ? null : () =>
+              navigate(signup ? 'Sign In' : signInPage
+                ? 'Create Account' : 'Sign In'),
+            child: Text(signup ? 'Already registered? Sign In'
+              : signInPage ? 'New to WeuTube? Create Account'
+              : 'Back to Sign In',
+              style: const TextStyle(
+                color: navy, fontSize: 13,
+                fontWeight: FontWeight.w700)))),
+          if(signInPage || signup) ...[
+            const SizedBox(height: 15),
+            Center(child: TextButton.icon(
+              onPressed: busy ? null : () => navigate('Home'),
+              icon: const Icon(Icons.arrow_back_rounded, size: 17),
+              label: const Text('Continue exploring'),
+              style: TextButton.styleFrom(
+                foregroundColor: slate))),
+          ],
+        ],
+      )),
+    );
+
+    // On mobile, authentication is page content rather than a giant
+    // vertically centered white dashboard card.
+    return Align(alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 430),
+        child: mobile ? fields : Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFE6EAF0))),
+          child: fields)));
   }
 
   Widget dashboard(double width) => Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -601,6 +821,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     const tabs=['Home','Explore','Shorts','Create','You'];
     final activeTab=tabs.contains(page)?page:'You';
     return Scaffold(
+      backgroundColor: isAuth && !wide ? Colors.white : soft,
       drawer:api.signedIn&&!wide&&!isSocial
         ?Drawer(child:SafeArea(child:sideNav())):null,
       body:SafeArea(child:Column(children:[
@@ -613,17 +834,21 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
               Builder(builder:(context)=>IconButton(
                 onPressed:()=>Scaffold.of(context).openDrawer(),
                 icon:const Icon(Icons.menu_rounded,color:navy))),
-            InkWell(onTap:()=>navigate('Home'),
-              child:const WeuTubeBrand(size:22)),
+            Flexible(fit: FlexFit.loose,
+              child: InkWell(onTap:()=>navigate('Home'),
+                child:const FittedBox(
+                  alignment: Alignment.centerLeft,
+                  fit: BoxFit.scaleDown,
+                  child: WeuTubeBrand(size:22)))),
             const Spacer(),
-            if(!api.signedIn&&wide)
+            if(!api.signedIn&&wide&&!isAuth)
               TextButton(onPressed:()=>navigate('Sign In'),
                 child:const Text('Sign In')),
             if(isSocial)
               IconButton(onPressed:()=>navigate('Explore'),
                 tooltip:'Search creators and videos',
                 icon:const Icon(Icons.search_rounded,color:navy)),
-            if(!api.signedIn&&!wide&&!isSocial)
+            if(!api.signedIn&&!wide&&!isSocial&&!isAuth)
               IconButton(onPressed:()=>navigate('Sign In'),
                 tooltip:'Sign in',
                 icon:const Icon(Icons.login_rounded,color:navy)),
@@ -654,12 +879,17 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                   onCreate:createFromSocial,
                   onStudio:()=>navigate('Dashboard'))))
             :SingleChildScrollView(
-              padding:EdgeInsets.all(width<520?15:25),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: isAuth
+                ? EdgeInsets.fromLTRB(width<650?24:28, width<650?22:36,
+                    width<650?24:28, 28+MediaQuery.viewInsetsOf(context).bottom)
+                : EdgeInsets.all(width<520?15:25),
               child:Center(child:ConstrainedBox(
                 constraints:const BoxConstraints(maxWidth:1050),
                 child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                  banner(),content(wide?width-290:width-35),
-                  const SizedBox(height:40)
+                  if(!isAuth) banner(),
+                  content(wide?width-290:width-35),
+                  if(!isAuth) const SizedBox(height:40)
                 ])))))
         ]))
       ])),
