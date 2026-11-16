@@ -13,6 +13,7 @@ dependencies:
   url_launcher: ^6.3.2
   flutter_svg: ^2.0.17
   video_player: ^2.9.5
+  youtube_player_iframe: 6.0.2
   share_plus: ^11.1.0
 dev_dependencies:
   flutter_test:
