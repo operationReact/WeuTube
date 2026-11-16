@@ -74,7 +74,7 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
       // Never continue YouTube audio or playback behind other screens.
-      _controller?.pause();
+      _controller?.pauseVideo();
     }
     // Do not force a paused or unmuted video to restart on app resume.
   }
@@ -82,7 +82,7 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
   void _configurePlayer() {
     final previous = _controller;
     _controller = null;
-    previous?.pause();
+    previous?.pauseVideo();
     previous?.close();
     _error = null;
     if (!widget.active) return;
@@ -121,7 +121,7 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.pause();
+    _controller?.pauseVideo();
     _controller?.close();
     super.dispose();
   }
