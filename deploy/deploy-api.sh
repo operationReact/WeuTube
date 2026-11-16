@@ -4,8 +4,8 @@
 set -euo pipefail
 umask 077
 
-if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
-  echo "Usage: deploy-api.sh <artifact-bucket> <commit-sha> <api-domain> <cognito-issuer> [bootstrap|verify]" >&2
+if [ "$#" -lt 4 ] || [ "$#" -gt 6 ]; then
+  echo "Usage: deploy-api.sh <artifact-bucket> <commit-sha> <api-domain> <cognito-issuer> [bootstrap|verify] [cognito-client-id]" >&2
   exit 2
 fi
 BUCKET="$1"
@@ -13,8 +13,10 @@ COMMIT="$2"
 DOMAIN="$3"
 ISSUER="$4"
 MODE="${5:-verify}"
+AUTH_CLIENT_ID="${6:-}"
 [[ "$MODE" == "bootstrap" || "$MODE" == "verify" ]] || { echo "Unsupported health-check mode" >&2; exit 2; }
 REGION="ap-south-1"
+[[ -z "$AUTH_CLIENT_ID" || "$AUTH_CLIENT_ID" =~ ^[a-zA-Z0-9]{10,128}$ ]] || { echo "Invalid Cognito client" >&2; exit 2; }
 [[ "$BUCKET" =~ ^[a-z0-9.-]+$ ]] || { echo "Invalid artifact bucket" >&2; exit 2; }
 [[ "$COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "Invalid revision" >&2; exit 2; }
 [[ "$DOMAIN" =~ ^[a-z0-9.-]+$ ]] || { echo "Invalid API domain" >&2; exit 2; }
@@ -88,6 +90,8 @@ DATABASE_URL=jdbc:postgresql://postgres:5432/weutube
 DATABASE_USERNAME=weutube
 DATABASE_PASSWORD=$POSTGRES_PASSWORD
 COGNITO_ISSUER_URI=$ISSUER
+WEUTUBE_COGNITO_REGION=$REGION
+WEUTUBE_COGNITO_CLIENT_ID=$AUTH_CLIENT_ID
 WEUTUBE_YOUTUBE_SSM_ENABLED=true
 WEUTUBE_YOUTUBE_SSM_REGION=$REGION
 WEUTUBE_YOUTUBE_REDIRECT_URI=https://$DOMAIN/api/admin/youtube/callback
