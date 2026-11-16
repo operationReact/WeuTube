@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weutube/main.dart';
+import 'package:weutube/upload_composer.dart';
+import 'package:weutube/backend_client.dart';
 import 'package:weutube/product_ui.dart' show WeuTubeBrand;
 
 void main() {
@@ -31,7 +33,7 @@ void main() {
     await tester.pumpWidget(const WeuTubeApp());
     await tester.tap(find.text('Create').last);
     await tester.pump();
-    expect(find.text('Share a video with the WeuTube community.'), findsOneWidget);
+    expect(find.text('Create video'), findsOneWidget);
     await tester.ensureVisible(find.text('Sign in to upload'));
     await tester.pump();
     await tester.tap(find.text('Sign in to upload'));
@@ -144,4 +146,72 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Create is the actual upload entry with the correct selected tab',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const WeuTubeApp());
+    await tester.tap(find.text('Create').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Create video'), findsOneWidget);
+    expect(find.text('Open Upload Studio'), findsNothing);
+    expect(find.text('How publishing works'), findsNothing);
+    expect(find.text('Sign in to upload'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('No channel grant blocks upload before any form fields appear',
+      (tester) async {
+    final api = _ComposerFakeApi([]);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      WeuTubeUploadComposer(api: api, onSignIn: () {}, onViewVideos: () {}))));
+    await tester.pumpAndSettle();
+    expect(find.text('Channel access required'), findsOneWidget);
+    expect(find.text('Check channel access again'), findsOneWidget);
+    expect(find.byKey(const ValueKey('upload-video-title')), findsNothing);
+    expect(find.text('Upload privately for review'), findsNothing);
+    api.dispose();
+  });
+
+  testWidgets('Forbidden channel lookup never reveals a runnable upload form',
+      (tester) async {
+    final api = _ComposerFakeApi([], denied: true);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      WeuTubeUploadComposer(api: api, onSignIn: () {}, onViewVideos: () {}))));
+    await tester.pumpAndSettle();
+    expect(find.text('Channel permissions unavailable'), findsOneWidget);
+    expect(find.textContaining('Your account cannot access'), findsOneWidget);
+    expect(find.byKey(const ValueKey('upload-video-title')), findsNothing);
+    api.dispose();
+  });
+
+  testWidgets('Authorized channel shows a compact upload composer',
+      (tester) async {
+    final api = _ComposerFakeApi([
+      {'channelId':'UC_Example_123','displayName':'Authorized channel'},
+    ]);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      WeuTubeUploadComposer(api: api, onSignIn: () {}, onViewVideos: () {}))));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a video'), findsOneWidget);
+    expect(find.byKey(const ValueKey('upload-video-title')), findsOneWidget);
+    expect(find.text('Upload privately for review'), findsOneWidget);
+    expect(find.text('Authorized YouTube channel'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    api.dispose();
+  });
+
+}
+
+class _ComposerFakeApi extends WeuTubeApi {
+  _ComposerFakeApi(this.channels, {this.denied = false}) {
+    accessToken = 'test-token';
+  }
+  final List<Map<String,dynamic>> channels;
+  final bool denied;
+  @override
+  Future<List<Map<String,dynamic>>> grantedChannels() async {
+    if (denied) throw const ApiFailure('Access denied.',403);
+    return channels;
+  }
 }
