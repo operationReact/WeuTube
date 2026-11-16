@@ -140,6 +140,21 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
       _channel = null;
     });
     try {
+      // First validate Cognito independently of the channel grant lookup.
+      // No grant should be an authenticated empty state, never a 403.
+      final session = await widget.api.creatorSession();
+      if(!mounted) return;
+      final access = session['uploadAccess']?.toString();
+      if(access == 'NO_CHANNEL_GRANT' || access == 'CHANNEL_NOT_CONNECTED') {
+        setState(() {
+          _access = UploadAccess.noChannel;
+          _error = access == 'NO_CHANNEL_GRANT'
+            ? 'Your account is signed in, but no YouTube channel is granted yet.'
+            : 'Your channel grant exists, but its YouTube connection is unavailable. '
+              'A channel administrator must reconnect it.';
+        });
+        return;
+      }
       final granted = await widget.api.grantedChannels();
       if (!mounted) return;
       final channels = granted.where((c) =>
@@ -153,12 +168,12 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
     } on ApiFailure catch (ex) {
       if (!mounted) return;
       setState(() {
-        _access = ex.code == 401 ? UploadAccess.signedOut :
-          ex.code == 403 ? UploadAccess.denied : UploadAccess.failed;
-        _error = ex.code == 403
-          ? 'Your account cannot access the channel authorization service. '
-            'Check your account permissions with a WeuTube administrator.'
-          : ex.code == 401 ? 'Your sign-in has expired. Sign in again.'
+        _access = ex.code == 401 || ex.code == 403
+          ? UploadAccess.denied : UploadAccess.failed;
+        _error = ex.code == 401 || ex.code == 403
+          ? 'Your current sign-in was rejected by the API (HTTP ${ex.code}). '
+            'Sign in again to renew your session. If it continues, '
+            'the backend Cognito token validation needs investigation.'
           : ex.message;
       });
     } catch (_) {
@@ -344,9 +359,16 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
           color: navy,fontSize: 13,height: 1.45))),
       ]));
 
+  void _reauthenticate() {
+    // Re-authentication does not bypass server channel grants.
+    widget.api.clear();
+    widget.onSignIn();
+  }
+
   Widget _blocked(String heading, String details, {
     bool canRetry = false,
     bool canSignIn = false,
+    bool canReauthenticate = false,
   }) => Column(crossAxisAlignment: CrossAxisAlignment.start,children: [
     const SizedBox(height: 12),
     Icon(canSignIn ? Icons.lock_outline_rounded
@@ -366,6 +388,8 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
       icon: Icons.login_rounded),
     if(canRetry) _primary('Check channel access again',_loadChannels,
       icon: Icons.refresh_rounded),
+    if(canReauthenticate) _primary('Sign in again',_reauthenticate,
+      icon: Icons.login_rounded),
     if(widget.api.signedIn) ...[
       const SizedBox(height: 10),
       SizedBox(width: double.infinity,
@@ -556,10 +580,11 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
               'channel and grant you permission before uploading.',
               canRetry: true)
           else if (_access == UploadAccess.denied)
-            _blocked('Channel permissions unavailable',
-              'Your account cannot use the upload service right now. '
-              'An administrator may need to update your permissions.',
-              canRetry: true)
+            _blocked('Sign-in verification failed',
+              'The API rejected your current session before it could check '
+              'which YouTube channels are available. Signing in again '
+              'does not change channel permissions.',
+              canReauthenticate: true,canRetry: true)
           else if (_access == UploadAccess.failed)
             _blocked('Unable to check channel access',
               'We could not verify whether you can upload. '
