@@ -9,7 +9,7 @@ class GoogleYouTubeClientTest {
  @Test void parsesAuthorizedTokens() throws Exception {
   var json=mapper.readTree("""
    {"access_token":"access-only","refresh_token":"refresh-only",
-    "scope":"https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload"}
+    "scope":"https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.force-ssl"}
    """);
   var tokens=GoogleYouTubeClient.parseTokens(json);
   assertEquals("access-only",tokens.accessToken());
