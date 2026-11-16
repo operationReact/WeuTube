@@ -168,6 +168,24 @@ class WeuTubeApi {
         '. Confirm channel permission before retrying.');
     return asMap(jsonDecode(response.body));
   }
+  /// Public, clearly differentiated demo fixtures and real published submissions.
+  Future<Map<String,dynamic>> publicFeed() async =>
+    asMap(await call('GET','/api/public/social/feed?limit=30&includeDemo=true',auth:false));
+  Future<Map<String,dynamic>> socialState() async =>
+    asMap(await call('GET','/api/social/me'));
+  Future<void> reactVideo(String id,String reaction,bool on) async {
+    if(id.startsWith('demo-')) throw const ApiFailure('Demo reactions are local only.');
+    if(reaction!='like'&&reaction!='save')throw const ApiFailure('Unsupported reaction.');
+    await call(on?'PUT':'DELETE',
+      '/api/social/videos/'+Uri.encodeComponent(id)+'/'+reaction);
+  }
+  Future<void> followCreator(String id,bool on) async =>
+    call(on?'PUT':'DELETE','/api/social/creators/'+Uri.encodeComponent(id)+'/follow');
+  Future<List<Map<String,dynamic>>> comments(String videoId) =>
+    list('/api/social/videos/'+Uri.encodeComponent(videoId)+'/comments');
+  Future<Map<String,dynamic>> postComment(String videoId,String message) async =>
+    asMap(await call('POST','/api/social/videos/'+Uri.encodeComponent(videoId)+'/comments',
+      data:{'text':message}));
   Future<List<Map<String,dynamic>>> reviewQueue() => list('/api/admin/reviews/queue');
   Future<Map<String,dynamic>> reviewDecision(String id,String decision,String reason) async =>
     asMap(await call('POST','/api/admin/reviews/'+Uri.encodeComponent(id)+'/decision',
