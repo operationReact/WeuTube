@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 /// A shared HTTPS backend for Android, iOS and Flutter web.
 const apiOrigin = String.fromEnvironment('WEUTUBE_API_ORIGIN',
@@ -139,7 +140,13 @@ class WeuTubeApi {
       uri('/api/creator/videos/'+Uri.encodeComponent(draftId)+'/private-upload'))
       ..headers['Authorization']='Bearer '+accessToken!
       ..fields['channelId']=channelId
-      ..files.add(http.MultipartFile.fromBytes('file',bytes,filename:filename));
+      ..files.add(http.MultipartFile.fromBytes('file',bytes,filename:filename,
+        contentType: MediaType.parse(
+          filename.toLowerCase().endsWith('.mp4') ? 'video/mp4' :
+          filename.toLowerCase().endsWith('.mov') ? 'video/quicktime' :
+          filename.toLowerCase().endsWith('.webm') ? 'video/webm' :
+          filename.toLowerCase().endsWith('.mkv') ? 'video/x-matroska' :
+          'video/mp4')));
     http.Response response;
     try {
       response=await http.Response.fromStream(
