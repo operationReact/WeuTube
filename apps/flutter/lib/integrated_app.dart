@@ -28,6 +28,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
   Map<String,dynamic> dashboardData = {}, walletData = {}, analyticsData = {}, profileData = {};
   List<Map<String,dynamic>> videoData = [], notificationData = [], withdrawalData = [];
   String error = '';
+  bool dashboardLoaded = false;
   static const nav = ['Dashboard','Upload Video','My Videos','Analytics',
     'Earnings','Wallet','Notifications','Profile','Settings'];
   static const navIcons = [Icons.dashboard_outlined,Icons.cloud_upload_outlined,
@@ -70,34 +71,65 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       confirmPassword.clear();
       showPassword = false;
     }
-    setState(() {page=p;error='';});
-    if(!api.signedIn || !nav.contains(p)) return;
-    await perform(() async {
-      switch(p) {
-        case 'Dashboard':
-          dashboardData=await api.dashboard();
-          break;
-        case 'My Videos':
-          videoData=await api.videos();
-          break;
-        case 'Analytics':
-          analyticsData=await api.analytics();
-          break;
-        case 'Earnings':
-        case 'Wallet':
-          walletData=await api.wallet();
-          withdrawalData=await api.withdrawals();
-          break;
-        case 'Notifications':
-          notificationData=await api.notifications();
-          break;
-        case 'Profile':
-          profileData=await api.profile();
-          displayName.text=profileData['displayName']?.toString() ?? '';
-          break;
-      }
+    setState(() {
+      page=p;
+      error='';
+      if(p=='Dashboard') dashboardLoaded=false;
     });
+    if(!api.signedIn || !nav.contains(p)) return;
+    // Do not skip the first protected request after login when perform()
+    // already holds the busy flag. A skipped call previously showed fake 0s.
+    if(busy) {
+      await _loadPage(p);
+    } else {
+      await perform(() => _loadPage(p));
+    }
   }
+  Future<void> _loadPage(String p) async {
+    switch(p) {
+      case 'Dashboard':
+        final result=await api.dashboard();
+        if(mounted) setState(() {
+          dashboardData=result;
+          dashboardLoaded=true;
+        });
+        break;
+      case 'My Videos':
+        final result=await api.videos();
+        if(mounted) setState(() => videoData=result);
+        break;
+      case 'Analytics':
+        final result=await api.analytics();
+        if(mounted) setState(() => analyticsData=result);
+        break;
+      case 'Earnings':
+      case 'Wallet':
+        final wallet=await api.wallet();
+        final withdrawals=await api.withdrawals();
+        if(mounted) setState(() {
+          walletData=wallet;withdrawalData=withdrawals;
+        });
+        break;
+      case 'Notifications':
+        final result=await api.notifications();
+        if(mounted) setState(() => notificationData=result);
+        break;
+      case 'Profile':
+        final result=await api.profile();
+        if(mounted) setState(() {
+          profileData=result;
+          displayName.text=profileData['displayName']?.toString() ?? '';
+        });
+        break;
+    }
+  }
+
+  Future<void> _retryCurrentPage() async {
+    final target=page;
+    if(!nav.contains(target) || !api.signedIn) return;
+    await navigate(target);
+  }
+
   Future<void> signIn() => perform(() async {
     if(!(form.currentState?.validate() ?? false)) return;
     final result=await api.login(email.text.trim(),password.text);
@@ -126,7 +158,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     try {await api.logout();}
     finally {
       if(mounted) setState(() {
-        page='Home';dashboardData={};walletData={};videoData=[];
+        page='Home';dashboardData={};dashboardLoaded=false;walletData={};videoData=[];
         password.clear();challenge='';challengeSession='';
       });
     }
@@ -524,6 +556,17 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
 
   Widget dashboard(double width) => Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     heading('Creator Dashboard','Account-specific content from the WeuTube API.'),
+    if(!dashboardLoaded) ...[
+      const SizedBox(height: 18),
+      notice(error.isNotEmpty
+        ? 'Could not load your creator statistics. Your video counts are '
+          'unknown until your account is authenticated.'
+        : 'Loading authenticated creator statistics…'),
+      const SizedBox(height: 12),
+      button('Retry creator dashboard',_retryCurrentPage,
+        icon:Icons.refresh_rounded),
+    ],
+    if(dashboardLoaded) ...[
     const SizedBox(height:17),
     metrics(width,[
       statistic('My Videos',(dashboardData['videos']??0).toString(),Icons.video_library_outlined),
@@ -543,6 +586,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     ])),
     const SizedBox(height:15),
     notice('Views and subscriber data are not estimated here. Open Analytics to retrieve available YouTube statistics.')
+    ],
   ]);
 
   Widget videos() {
