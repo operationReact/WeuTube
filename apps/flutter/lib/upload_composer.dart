@@ -43,6 +43,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
   PlatformFile? _file;
   String _category = 'Lifestyle';
   String? _error;
+  String? _channelAccessReason;
   bool _sending = false;
   bool _pauseRequested = false;
   String? _draftId;
@@ -136,6 +137,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
     setState(() {
       _access = UploadAccess.checking;
       _error = null;
+      _channelAccessReason = null;
       _channels = [];
       _channel = null;
     });
@@ -150,10 +152,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
       if(access == 'NO_CHANNEL_GRANT' || access == 'CHANNEL_NOT_CONNECTED') {
         setState(() {
           _access = UploadAccess.noChannel;
-          _error = access == 'NO_CHANNEL_GRANT'
-            ? 'Your account is signed in, but no YouTube channel is granted yet.'
-            : 'Your channel grant exists, but its YouTube connection is unavailable. '
-              'A channel administrator must reconnect it.';
+          _channelAccessReason = access;
         });
         return;
       }
@@ -165,6 +164,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
         _channels = channels;
         _channel = channels.isEmpty ? null : channels.first['channelId'].toString();
         _access = channels.isEmpty ? UploadAccess.noChannel : UploadAccess.ready;
+        _channelAccessReason = channels.isEmpty ? 'NO_CHANNEL_GRANT' : null;
       });
       if(channels.isNotEmpty) await _restorePending();
     } on ApiFailure catch (ex) {
@@ -372,6 +372,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
 
   Widget _blocked(String heading, String details, {
     bool canRetry = false,
+    String retryLabel = 'Check channel access again',
     bool canSignIn = false,
     bool canReauthenticate = false,
   }) => Column(crossAxisAlignment: CrossAxisAlignment.start,children: [
@@ -391,7 +392,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
     const SizedBox(height: 22),
     if(canSignIn) _primary('Sign in to upload',widget.onSignIn,
       icon: Icons.login_rounded),
-    if(canRetry) _primary('Check channel access again',_loadChannels,
+    if(canRetry) _primary(retryLabel,_loadChannels,
       icon: Icons.refresh_rounded),
     if(canReauthenticate) _primary('Sign in again',_reauthenticate,
       icon: Icons.login_rounded),
@@ -579,11 +580,20 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
                 Text('Checking your channel access…',
                   style: TextStyle(color: slate))]))
           else if (_access == UploadAccess.noChannel)
-            _blocked('Channel access required',
-              'You are signed in, but no YouTube channel has been granted '
-              'to your account. A WeuTube administrator must connect a '
-              'channel and grant you permission before uploading.',
-              canRetry: true)
+            _blocked(
+              _channelAccessReason == 'CHANNEL_NOT_CONNECTED'
+                ? 'YouTube channel disconnected' : 'Channel permission needed',
+              _channelAccessReason == 'CHANNEL_NOT_CONNECTED'
+                ? 'Your account already has permission to use a channel, '
+                  'but its YouTube connection is unavailable. The channel '
+                  'owner needs to reconnect it in the Admin panel. '
+                  'Your sign-in is working; signing in again will not fix this.'
+                : 'You are signed in successfully. Uploading is currently '
+                  'restricted to YouTube channels authorized by a WeuTube '
+                  'administrator. Ask an administrator to connect a channel '
+                  'and grant your creator account access. Refresh this page '
+                  'after that permission has been granted.',
+              canRetry: true, retryLabel: 'Refresh channel status')
           else if (_access == UploadAccess.denied)
             _blocked('Sign-in verification failed',
               'The API rejected your current session before it could check '
