@@ -121,6 +121,7 @@ class WeuTubeApi {
     finally {clear();}
   }
   Future<Map<String,dynamic>> dashboard() async => asMap(await call('GET','/api/creator/dashboard'));
+  Future<List<Map<String,dynamic>>> grantedChannels() => list('/api/creator/channels');
   Future<List<Map<String,dynamic>>> videos() => list('/api/creator/videos');
   Future<Map<String,dynamic>> video(String id) async =>
     asMap(await call('GET','/api/creator/videos/'+Uri.encodeComponent(id)));
