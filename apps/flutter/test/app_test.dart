@@ -19,7 +19,7 @@ void main() {
     await tester.tap(find.text('Explore').first);
     await tester.pump();
     expect(find.text('People, passions and places worth finding.'), findsOneWidget);
-    expect(find.text('For your curiosity'), findsOneWidget);
+    expect(find.text('Search creators, videos or topics'), findsOneWidget);
   });
 
   testWidgets('Sign-in is available when a person wants to create', (tester) async {
