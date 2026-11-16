@@ -28,20 +28,24 @@ public class CreatorPrivateUploadController {
   if(channelId==null || channelId.isBlank() || channelId.length()>128)
    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid channel ID");
   if(file.getSize()<=0 || file.getSize()>GooglePrivateUploadService.MAX_UPLOAD_BYTES)
-   throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Video must be 1-256 MB");
+   throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Current direct-upload gateway accepts 256 MiB; larger videos require resumable upload");
   // Verify ownership and channel assignment in one atomic transition.
   var drafts=jdbc.query("""
-    SELECT v.title FROM video_submissions v
+    SELECT v.title,v.description FROM video_submissions v
     JOIN creators c ON c.id=v.creator_id
     JOIN creator_channel_grants g ON g.creator_id=c.id
     JOIN youtube_oauth_credentials auth ON auth.youtube_channel_id=g.youtube_channel_id
     WHERE v.id=? AND v.status='DRAFT' AND c.cognito_sub=? AND g.youtube_channel_id=?
-    """,(rs,row)->rs.getString(1),id,jwt.getSubject(),channelId);
+    """,(rs,row)->new String[] {rs.getString(1),rs.getString(2)},
+      id,jwt.getSubject(),channelId);
   if(drafts.isEmpty())
    throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Owned draft or channel grant not found");
-  String title=drafts.get(0);
-  if(title.length()>100)
-   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"YouTube titles must be at most 100 characters");
+  String title=YouTubeUploadConstraints.validatedTitle(drafts.get(0)[0]);
+  String description=YouTubeUploadConstraints.validatedDescription(drafts.get(0)[1]);
+  String expectedMime=YouTubeUploadConstraints.mimeForName(file.getOriginalFilename());
+  if(expectedMime==null)
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+     "Unsupported video container. Choose a YouTube-supported video file");
   int claimed=jdbc.update("""
     UPDATE video_submissions v
     SET status='UPLOADING',updated_at=now()
@@ -58,7 +62,7 @@ public class CreatorPrivateUploadController {
   // UPLOADING is retained on uncertain failure to avoid accidental duplicate uploads.
   GooglePrivateUploadService.Uploaded result;
   try {
-   result=uploader.upload(channelId,title,file);
+   result=uploader.upload(channelId,title,description,file);
   } catch (IllegalArgumentException ex) {
    jdbc.update("UPDATE video_submissions SET status='DRAFT',updated_at=now() WHERE id=? AND status='UPLOADING'",
       id);
