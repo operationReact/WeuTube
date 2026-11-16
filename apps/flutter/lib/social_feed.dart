@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'backend_client.dart';
 import 'social_demo_data.dart';
@@ -426,12 +427,25 @@ class _SocialHubState extends State<SocialHub> {
   }
 
   Future<void> share(Map<String,dynamic> item) async {
-    final raw = isDemo(item) ? str(item['videoUrl']) : str(item['youtubeUrl']);
-    final uri = Uri.tryParse(raw);
-    if(uri != null && uri.scheme=='https') {
-      await launchUrl(uri,mode:LaunchMode.externalApplication);
-    } else {
-      inform('A share link is not available.');
+    final raw=isDemo(item)?str(item['videoUrl']):str(item['youtubeUrl']);
+    final uri=Uri.tryParse(raw);
+    if(uri==null||uri.scheme!='https') {
+      inform('A verified share link is not available.');
+      return;
+    }
+    final box=context.findRenderObject();
+    final origin=box is RenderBox?
+      (box.localToGlobal(Offset.zero)&box.size):null;
+    final caption=isDemo(item)
+      ?'WeuTube sample preview (not a real creator post)'
+      :'Published on WeuTube';
+    try {
+      await SharePlus.instance.share(ShareParams(
+        text:str(item['title'])+'\\n'+caption+'\\n'+raw,
+        subject:'WeuTube · '+str(item['title']),
+        sharePositionOrigin:origin));
+    } catch(_) {
+      inform('Sharing is unavailable on this device.');
     }
   }
 
