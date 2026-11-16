@@ -604,7 +604,8 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       drawer:api.signedIn&&!wide&&!isSocial
         ?Drawer(child:SafeArea(child:sideNav())):null,
       body:SafeArea(child:Column(children:[
-        Container(height:66,padding:const EdgeInsets.symmetric(horizontal:15),
+        if(page!='Shorts') Container(height:wide?62:54,
+          padding:const EdgeInsets.symmetric(horizontal:15),
           decoration:const BoxDecoration(color:Colors.white,
             border:Border(bottom:BorderSide(color:Color(0xFFE9ECF3)))),
           child:Row(children:[
@@ -620,9 +621,9 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                 child:const Text('Sign In')),
             if(isSocial)
               IconButton(onPressed:()=>navigate('Explore'),
-                tooltip:'Explore creators',
+                tooltip:'Search creators and videos',
                 icon:const Icon(Icons.search_rounded,color:navy)),
-            if(!api.signedIn&&!wide)
+            if(!api.signedIn&&!wide&&!isSocial)
               IconButton(onPressed:()=>navigate('Sign In'),
                 tooltip:'Sign in',
                 icon:const Icon(Icons.login_rounded,color:navy)),
@@ -632,7 +633,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                   icon:const Icon(Icons.admin_panel_settings_outlined,color:coral)),
               IconButton(onPressed:()=>navigate('Notifications'),
                 icon:const Icon(Icons.notifications_none_rounded,color:navy)),
-              IconButton(onPressed:()=>navigate('You'),
+              if(!isSocial) IconButton(onPressed:()=>navigate('You'),
                 icon:const Icon(Icons.account_circle_outlined,color:navy)),
             ]
           ])),
