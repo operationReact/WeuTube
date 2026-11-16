@@ -28,6 +28,20 @@ public class AdminPublishController {
    throw new AccessDeniedException("Admin group required");
  }
  public record Target(String videoId,String channelId,String status) {}
+ public record PublicationQueueItem(UUID id,String title,String status,String channelId) {}
+ @GetMapping("/approved")
+ public java.util.List<PublicationQueueItem> approved(@AuthenticationPrincipal Jwt jwt) {
+  requireAdmin(jwt);
+  return jdbc.query("""
+    SELECT v.id,v.title,v.status,c.youtube_channel_id
+    FROM video_submissions v
+    JOIN youtube_channels c ON c.id=v.youtube_channel_id
+    WHERE v.status IN ('APPROVED','PUBLISHING')
+    ORDER BY v.updated_at ASC,v.id ASC LIMIT 50
+    """,(rs,row)->new PublicationQueueItem((UUID)rs.getObject(1),
+      rs.getString(2),rs.getString(3),rs.getString(4)));
+ }
+
  private Target target(UUID id) {
   var records=jdbc.query("""
    SELECT v.youtube_video_id,c.youtube_channel_id,v.status
