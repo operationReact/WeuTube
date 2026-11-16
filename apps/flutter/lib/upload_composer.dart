@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_client.dart';
 import 'youtube_upload_rules.dart';
@@ -27,7 +28,7 @@ class WeuTubeUploadComposer extends StatefulWidget {
 }
 
 class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
-  static const maxBytes = YouTubeUploadRules.directGatewayMaxBytes;
+  static const maxBytes = YouTubeUploadRules.youtubeMaxBytes;
   static const categories = [
     'Travel', 'Art', 'Lifestyle', 'Storytelling', 'Education',
     'Entertainment', 'Technology', 'Stories',
@@ -43,9 +44,55 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
   String _category = 'Lifestyle';
   String? _error;
   bool _sending = false;
-  bool _uploadAttempted = false;
+  bool _pauseRequested = false;
   String? _draftId;
+  String? _sessionId;
+  String? _resumeName;
+  int? _resumeSize;
   int _transferPercent = 0;
+
+  static const _prefSession = 'weutube.resumable.session';
+  static const _prefDraft = 'weutube.resumable.draft';
+  static const _prefName = 'weutube.resumable.name';
+  static const _prefSize = 'weutube.resumable.size';
+
+  Future<void> _rememberPending(String sessionId,String draftId,
+      PlatformFile file) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefSession,sessionId);
+    await prefs.setString(_prefDraft,draftId);
+    await prefs.setString(_prefName,file.name);
+    await prefs.setInt(_prefSize,file.size);
+  }
+  Future<void> _restorePending() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id=prefs.getString(_prefSession);
+      if(id==null || !mounted) return;
+      setState(() {
+        _sessionId=id;
+        _draftId=prefs.getString(_prefDraft);
+        _resumeName=prefs.getString(_prefName);
+        _resumeSize=prefs.getInt(_prefSize);
+      });
+    } catch (_) {
+      // Local persistence is best-effort; server-side ownership stays strict.
+    }
+  }
+  Future<void> _forgetPending() async {
+    final prefs=await SharedPreferences.getInstance();
+    for(final key in [_prefSession,_prefDraft,_prefName,_prefSize]) {
+      await prefs.remove(key);
+    }
+    if(mounted) setState(() {
+      _sessionId=null;
+      _draftId=null;
+      _resumeName=null;
+      _resumeSize=null;
+      _file=null;
+      _transferPercent=0;
+    });
+  }
 
   @override
   void initState() {
@@ -69,6 +116,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
         _channel = null;
         _file = null;
         _draftId = null;
+        _sessionId = null;
       }
     }
   }
@@ -101,6 +149,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
         _channel = channels.isEmpty ? null : channels.first['channelId'].toString();
         _access = channels.isEmpty ? UploadAccess.noChannel : UploadAccess.ready;
       });
+      if(channels.isNotEmpty) await _restorePending();
     } on ApiFailure catch (ex) {
       if (!mounted) return;
       setState(() {
@@ -144,9 +193,17 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
       if (file.size <= 0 || file.size > maxBytes) {
         setState(() {
           _file = null;
-          _error = 'The current WeuTube direct uploader supports up to '
-            '256 MiB per file. YouTube supports up to 256 GB or 12 hours; '
-            'larger uploads need the new resumable upload infrastructure.';
+          _error = 'The selected video exceeds YouTube’s limit of 256 GB '
+            'or has no data.';
+        });
+        return;
+      }
+      if (_sessionId != null &&
+          (file.name != _resumeName || file.size != _resumeSize)) {
+        setState(() {
+          _file = null;
+          _error = 'Select the same original video to resume your current upload, '
+            'or cancel that upload to start a different one.';
         });
         return;
       }
@@ -166,59 +223,97 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
   }
 
   Future<void> _submit() async {
-    if (_sending || _uploadAttempted || _access != UploadAccess.ready) return;
-    if (!(_form.currentState?.validate() ?? false)) return;
-    final video = _file;
-    if (video == null) {
-      setState(() => _error = 'Choose a video before uploading.');
+    if (_sending || _access != UploadAccess.ready) return;
+    final video=_file;
+    if(video==null) {
+      setState(() => _error = _sessionId==null
+        ? 'Choose a video before uploading.'
+        : 'Reselect the same original video to resume uploading.');
       return;
     }
-    final channel = _channel;
-    if (channel == null) {
+    if (_sessionId == null && !(_form.currentState?.validate() ?? false)) return;
+    final channel=_channel;
+    if(channel==null) {
       setState(() => _error = 'Select an authorized channel.');
       return;
     }
     setState(() {
-      _sending = true;
-      _error = null;
-      _transferPercent = 0;
+      _sending=true;
+      _pauseRequested=false;
+      _error=null;
     });
     try {
-      // Avoid duplicate drafts if only the metadata stage failed.
-      final draftId = _draftId ?? (await widget.api.createDraft(_title.text.trim()))['id']?.toString();
-      if (draftId == null || draftId.isEmpty) {
-        throw const ApiFailure('Could not create a draft. Try again.');
+      var id=_sessionId;
+      if(id==null) {
+        // Create metadata exactly once; a repeated upload session for a draft
+        // is idempotent in the API and cannot create a duplicate video.
+        final draftId=_draftId ??
+          (await widget.api.createDraft(_title.text.trim()))['id']?.toString();
+        if(draftId==null || draftId.isEmpty)
+          throw const ApiFailure('Unable to create a video draft.');
+        _draftId=draftId;
+        await widget.api.updateDraftMetadata(draftId,_title.text.trim(),
+          _description.text.trim(),_category);
+        final session=await widget.api.beginYouTubeUpload(draftId,channel,video);
+        id=session['id']?.toString();
+        if(id==null || id.isEmpty)
+          throw const ApiFailure('YouTube upload session was not created.');
+        _sessionId=id;
+        _resumeName=video.name;
+        _resumeSize=video.size;
+        await _rememberPending(id,draftId,video);
       }
-      _draftId = draftId;
-      await widget.api.updateDraftMetadata(
-        draftId, _title.text.trim(), _description.text.trim(), _category);
-      // From here, a timeout can mean the upload started remotely. Never
-      // silently retry or create a second draft in that uncertain state.
-      _uploadAttempted = true;
-      await widget.api.uploadSelected(draftId, channel, video,
-        onTransferProgress: (percent) {
-          if (!mounted || percent <= _transferPercent) return;
-          setState(() => _transferPercent = percent);
+      final result=await widget.api.transferToYouTube(id,video,
+        shouldPause:()=>_pauseRequested,
+        onProgress:(ack,total) {
+          if(!mounted) return;
+          setState(() => _transferPercent=(ack*100 ~/ total).clamp(0,100));
         });
-      if (!mounted) return;
-      setState(() => _sending = false);
-      widget.onViewVideos();
-    } on ApiFailure catch (ex) {
-      if (!mounted) return;
+      if(!mounted) return;
+      if(result['status']=='COMPLETED') {
+        await _forgetPending();
+        if(!mounted) return;
+        widget.onViewVideos();
+      } else {
+        setState(() {
+          _file=null;
+          _error='Upload paused. Reselect the same original video and tap '
+            'Resume to continue from YouTube’s confirmed progress.';
+        });
+      }
+    } on ApiFailure catch(ex) {
+      if(!mounted) return;
       setState(() {
-        _error = _uploadAttempted
-          ? 'Upload outcome is uncertain. Check My Videos before trying again. '
-            'A duplicate upload may be created otherwise. (${ex.message})'
-          : ex.message;
-        _sending = false;
+        _file=null; // FilePicker streams are single-use: reselect to resume.
+        _error=_sessionId==null
+          ? ex.message
+          : 'Upload interrupted. Your confirmed YouTube progress is saved. '
+            'Reselect the original video and tap Resume. (${ex.message})';
       });
-    } catch (_) {
-      if (mounted) setState(() {
-        _error = _uploadAttempted
-          ? 'Upload outcome is uncertain. Check My Videos before retrying.'
-          : 'Could not prepare the upload. Try again.';
-        _sending = false;
+    } catch(_) {
+      if(!mounted) return;
+      setState(() {
+        _file=null;
+        _error=_sessionId==null
+          ? 'Could not start the upload. Try again.'
+          : 'Upload paused. Reselect the original video to resume.';
       });
+    } finally {
+      if(mounted) setState(() => _sending=false);
+    }
+  }
+
+  Future<void> _cancelPending() async {
+    final session=_sessionId;
+    if(_sending || session==null) return;
+    setState(() => _sending=true);
+    try {
+      await widget.api.cancelYouTubeUpload(session);
+      await _forgetPending();
+    } on ApiFailure catch(ex) {
+      if(mounted) setState(() => _error=ex.message);
+    } finally {
+      if(mounted) setState(() => _sending=false);
     }
   }
 
@@ -306,7 +401,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start,children: [
         const SizedBox(height: 10),
         _fieldLabel('Video'),
-        InkWell(onTap: _sending || _uploadAttempted ? null : _chooseVideo,
+        InkWell(onTap: _sending ? null : _chooseVideo,
           borderRadius: BorderRadius.circular(14),
           child: Container(width: double.infinity,
             constraints: const BoxConstraints(minHeight: 104),
@@ -326,7 +421,8 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
                       fontSize: 15,fontWeight: FontWeight.w800)),
                   const SizedBox(height: 5),
                   Text(_file == null
-                    ? 'YouTube formats · current direct upload: 256 MiB'
+                    ? (_sessionId==null ? 'YouTube formats · up to 256 GB / 12 hours'
+                    : 'Reselect ${_resumeName ?? "your original video"} to resume')
                     : '${(_file!.size / (1024 * 1024)).toStringAsFixed(1)} MB · Tap to change',
                     style: const TextStyle(color: slate,fontSize: 12)),
                 ])),
@@ -337,6 +433,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
         TextFormField(
           key: const ValueKey('upload-video-title'),
           controller: _title,
+          enabled: !_sending && _sessionId==null,
           maxLength: YouTubeUploadRules.titleMaxChars,
           maxLines: 1,
           textInputAction: TextInputAction.next,
@@ -346,6 +443,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
         _fieldLabel('Description (optional)'),
         TextFormField(
           controller: _description,
+          enabled: !_sending && _sessionId==null,
           minLines: 2,maxLines: 3,
           maxLength: YouTubeUploadRules.descriptionMaxUtf8Bytes,
           decoration: _decoration('Tell viewers what this video is about'),
@@ -359,7 +457,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
           decoration: _decoration('Choose category'),
           items: categories.map((c) => DropdownMenuItem(
             value: c,child: Text(c))).toList(),
-          onChanged: _sending || _uploadAttempted ? null :
+          onChanged: _sending || _sessionId!=null ? null :
             (value) => setState(() => _category = value ?? 'Lifestyle')),
         const SizedBox(height: 17),
         _fieldLabel('Authorized YouTube channel'),
@@ -376,10 +474,9 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
           onChanged: _sending || _uploadAttempted ? null :
             (value) => setState(() => _channel = value)),
         const SizedBox(height: 16),
-        _info('Your video is uploaded privately to the authorized YouTube '
-          'channel, then reviewed by WeuTube before publishing. '
-          'YouTube supports videos up to 12 hours/256 GB on eligible channels; '
-          'the current WeuTube direct gateway is limited to 256 MiB.'),
+        _info('YouTube accepts videos up to 256 GB or 12 hours on eligible '
+          'channels. WeuTube relays small chunks directly to YouTube without '
+          'storing a full video copy. Private review is required before publishing.'),
         if (_error != null) ...[
           const SizedBox(height: 12),
           _info(_error!, warning: true),
@@ -393,20 +490,36 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
             backgroundColor: const Color(0xFFECEFF6)),
           const SizedBox(height: 6),
           Text(_transferPercent == 100
-            ? 'Video sent. Waiting for private YouTube upload confirmation…'
-            : 'Sending video · $_transferPercent% of file transferred',
+            ? 'YouTube confirmed video upload. Finishing review handoff…'
+            : 'YouTube accepted $_transferPercent% of this video',
             style: const TextStyle(color: slate,fontSize: 12)),
         ],
         const SizedBox(height: 19),
-        _primary(_sending ? 'Uploading privately…'
-          : _uploadAttempted ? 'Check upload status in My Videos'
+        _primary(_sending ? 'Uploading to YouTube…'
+          : _sessionId!=null ? 'Resume YouTube upload'
           : 'Upload privately for review',
-          _sending ? null : _uploadAttempted ? widget.onViewVideos : _submit,
+          _sending ? null : _submit,
           icon: Icons.cloud_upload_outlined),
+        if(_sending) ...[
+          const SizedBox(height: 8),
+          SizedBox(width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => setState(() => _pauseRequested=true),
+              child: Text(_pauseRequested ? 'Pausing after current chunk…'
+                : 'Pause upload'))),
+        ],
+        if(_sessionId!=null && !_sending) ...[
+          const SizedBox(height: 8),
+          SizedBox(width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _cancelPending,
+              icon: const Icon(Icons.close_rounded),
+              label: const Text('Cancel pending upload'))),
+        ],
         const SizedBox(height: 11),
-        Text('Upload only videos you own or have permission to distribute. '
-          'Large uploads need a reliable connection; interrupted uploads are '
-          'not yet resumable.',
+        Text('Upload only videos you own or may distribute. YouTube retains '
+          'the video; interrupted transfers can resume by reselecting the '
+          'original file. Connection and YouTube channel eligibility apply.',
           style: const TextStyle(color: slate,fontSize: 11,height: 1.4)),
         const SizedBox(height: 28),
       ]));
