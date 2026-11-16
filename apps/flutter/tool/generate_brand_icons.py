@@ -74,6 +74,10 @@ if android.is_dir():
     if manifest.is_file():
         xml = manifest.read_text()
         xml = xml.replace('android:label="weutube"', 'android:label="WeuTube"')
+        # Production builds need HTTPS access for real feeds and sample videos.
+        if 'android.permission.INTERNET' not in xml:
+            xml = xml.replace('<application',
+                '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
         manifest.write_text(xml)
 
 # Native iOS icon catalog; resize each icon referenced by Contents.json.
