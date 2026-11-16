@@ -28,6 +28,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
   List<Map<String,dynamic>> videoData = [], notificationData = [], withdrawalData = [];
   String error = '';
   PlatformFile? selectedFile;
+  List<Map<String,dynamic>> grantedChannelData = [];
   static const nav = ['Dashboard','Upload Video','My Videos','Analytics',
     'Earnings','Wallet','Notifications','Profile','Settings'];
   static const navIcons = [Icons.dashboard_outlined,Icons.cloud_upload_outlined,
@@ -66,6 +67,12 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     if(!api.signedIn || !nav.contains(p)) return;
     await perform(() async {
       switch(p) {
+        case 'Upload Video':
+          grantedChannelData=await api.grantedChannels();
+          if(grantedChannelData.isNotEmpty) {
+            channelId.text=grantedChannelData.first['channelId']?.toString() ?? '';
+          }
+          break;
         case 'Dashboard':
           dashboardData=await api.dashboard();
           break;
@@ -386,7 +393,19 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     const SizedBox(height:17),
     panel(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       field('Video Title',title),
-      field('Authorized YouTube Channel ID',channelId),
+      if(grantedChannelData.isEmpty)
+        notice('No YouTube channel has been authorized for your account yet. An admin must grant access before a real upload can start.'),
+      if(grantedChannelData.isNotEmpty)
+        DropdownButtonFormField<String>(
+          initialValue:grantedChannelData.any((v)=>v['channelId']==channelId.text)
+            ?channelId.text:grantedChannelData.first['channelId']?.toString(),
+          decoration:const InputDecoration(labelText:'Authorized publishing channel'),
+          items:grantedChannelData.map((v)=>DropdownMenuItem<String>(
+            value:v['channelId']?.toString()??'',
+            child:Text(v['displayName']?.toString()??'YouTube channel'))).toList(),
+          onChanged:(value)=>channelId.text=value??'',
+        ),
+      const SizedBox(height:14),
       button(selectedFile==null?'Choose Video (max 20 MB)':
         'Selected: '+selectedFile!.name,()=>perform(() async {
         final picked=await FilePicker.platform.pickFiles(type:FileType.video,
@@ -402,7 +421,8 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       const SizedBox(height:14),
       button('Create Draft & Upload Privately',()=>perform(() async {
         if(title.text.trim().isEmpty) throw const ApiFailure('Enter a title.');
-        if(channelId.text.trim().isEmpty) throw const ApiFailure('Enter a connected YouTube channel ID.');
+        if(grantedChannelData.isEmpty) throw const ApiFailure('Ask a WeuTube admin to grant upload access to the official channel.');
+        if(channelId.text.trim().isEmpty) throw const ApiFailure('Select an authorized YouTube channel.');
         final file=selectedFile;
         if(file==null||file.bytes==null) throw const ApiFailure('Select a video file first.');
         final draft=await api.createDraft(title.text.trim());
