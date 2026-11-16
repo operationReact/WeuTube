@@ -307,55 +307,149 @@ class _SocialHubState extends State<SocialHub> {
               fontWeight:FontWeight.w600,fontSize:12))]
         ])));
 
-  Widget postCard(Map<String,dynamic> item) {
-    final key=id(item);
-    final followed=following.contains(
-      str(item['creatorId']).isEmpty ? str(item['creator']) : str(item['creatorId']));
-    return Padding(padding:const EdgeInsets.only(bottom:15),
-      child:card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Row(children:[
-          CircleAvatar(radius:20,backgroundColor:coral.withValues(alpha:.12),
-            child:const Icon(Icons.people_alt_rounded,color:coral,size:19)),
-          const SizedBox(width:9),
-          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
-            children:[
-              Text(str(item['creator']),style:const TextStyle(
-                color:navy,fontWeight:FontWeight.w800,fontSize:13)),
-              Text(str(item['handle']),style:const TextStyle(
-                color:slate,fontSize:11))
+  /// Video-first, full-height card: content takes the screen instead of
+  /// being buried under repetitive white Flutter dashboard containers.
+  Widget immersivePost(Map<String,dynamic> item,int index) {
+    final key=id(item),followed=following.contains(followKey(item));
+    return Padding(padding:const EdgeInsets.fromLTRB(9,3,9,6),
+      child:ClipRRect(borderRadius:BorderRadius.circular(22),
+        child:Stack(fit:StackFit.expand,children:[
+          SocialMediaStage(
+            key:ValueKey('home-media-$key'),
+            thumbnailUrl:image(item),
+            previewUrl:isDemo(item)?str(item['videoUrl']):null,
+            active:widget.section=='Home'&&index==homeIndex,
+            immersive:true,
+            onTap:()=>play(item),
+            onDoubleTap:()=>doubleTapLike(item)),
+          Positioned(top:15,left:15,right:15,child:Row(children:[
+            if(isDemo(item))
+              pill('DEMO · sample content',Colors.white)
+            else
+              pill('PUBLISHED',Colors.white),
+            const Spacer(),
+            Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:5),
+              decoration:BoxDecoration(
+                color:Colors.black.withValues(alpha:.38),
+                borderRadius:BorderRadius.circular(100)),
+              child:Row(children:[
+                const Icon(Icons.visibility_outlined,color:Colors.white,size:15),
+                const SizedBox(width:5),
+                Text(compact(item['views']),
+                  style:const TextStyle(color:Colors.white,fontSize:11,
+                    fontWeight:FontWeight.w700))
+              ]))
+          ])),
+          Positioned(bottom:20,left:16,right:69,child:Column(
+            crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Row(children:[
+                CreatorPortrait(name:str(item['creator']),imageUrl:avatar(item),
+                  radius:19,highlighted:true),
+                const SizedBox(width:9),
+                Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+                  children:[
+                    Text(str(item['creator']),maxLines:1,
+                      overflow:TextOverflow.ellipsis,style:const TextStyle(
+                        color:Colors.white,fontWeight:FontWeight.w900,fontSize:15)),
+                    Text(str(item['handle']),maxLines:1,
+                      style:const TextStyle(color:Colors.white70,fontSize:11))
+                  ])),
+              ]),
+              const SizedBox(height:13),
+              Text(str(item['title']),maxLines:3,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:Colors.white,fontSize:23,
+                  height:1.12,fontWeight:FontWeight.w900)),
+              const SizedBox(height:7),
+              Text(str(item['description']),maxLines:2,
+                overflow:TextOverflow.ellipsis,style:const TextStyle(
+                  color:Colors.white,fontSize:12,height:1.4)),
+              const SizedBox(height:10),
+              Row(children:[
+                Icon(Icons.auto_awesome,color:coral,size:14),
+                const SizedBox(width:5),
+                Expanded(child:Text(str(item['category'])+'  ·  WeuTube',
+                  style:const TextStyle(color:Colors.white70,
+                    fontWeight:FontWeight.w700,fontSize:11))),
+              ])
             ])),
-          if(isDemo(item))pill('SAMPLE',coral),
-          const SizedBox(width:7),
-          TextButton(onPressed:()=>follow(item),
-            style:TextButton.styleFrom(foregroundColor:coral,
-              padding:const EdgeInsets.symmetric(horizontal:7)),
-            child:Text(followed?'Following':'+ Follow',style:const TextStyle(
-              fontSize:12,fontWeight:FontWeight.w800)))
-        ]),
-        const SizedBox(height:11),
-        GestureDetector(onTap:()=>play(item),
-          child:SizedBox(height:215,width:double.infinity,
-            child:thumbnail(item))),
-        const SizedBox(height:13),
-        Row(children:[
-          Expanded(child:Text(str(item['title']),style:const TextStyle(
+          Positioned(bottom:23,right:10,child:Column(children:[
+            _rail(Icons.person_add_alt_1_rounded,followed?'Following':'Follow',
+              ()=>follow(item),accent:followed),
+            _rail(liked.contains(key)?Icons.favorite:Icons.favorite_border,
+              compact(item['likes']),()=>like(item),accent:liked.contains(key)),
+            _rail(Icons.mode_comment_outlined,compact(item['comments']),
+              ()=>openComments(item)),
+            _rail(saved.contains(key)?Icons.bookmark:Icons.bookmark_outline,
+              'Save',()=>save(item),accent:saved.contains(key)),
+            _rail(Icons.share_rounded,'Share',()=>share(item))
+          ])),
+          if(showQuickHeart&&index==homeIndex)
+            const Center(child:Icon(Icons.favorite_rounded,
+              color:Colors.white,size:93)),
+          Positioned(bottom:4,left:0,right:0,
+            child:Center(child:Container(
+              width:28,height:3,
+              decoration:BoxDecoration(color:Colors.white38,
+                borderRadius:BorderRadius.circular(8)))))
+        ])));
+  }
+
+  Widget _rail(IconData icon,String label,VoidCallback action,
+      {bool accent=false})=>Padding(padding:const EdgeInsets.only(bottom:12),
+    child:InkWell(onTap:action,borderRadius:BorderRadius.circular(50),
+      child:Column(mainAxisSize:MainAxisSize.min,children:[
+        Icon(icon,color:accent?coral:Colors.white,size:29,
+          shadows:const [Shadow(color:Colors.black45,blurRadius:8)]),
+        const SizedBox(height:3),
+        Text(label,style:const TextStyle(color:Colors.white,fontSize:10,
+          fontWeight:FontWeight.w800,
+          shadows:[Shadow(color:Colors.black54,blurRadius:6)]))
+      ])));
+
+  /// Compact chronological layout for collections (not the immersive Home).
+  Widget postCard(Map<String,dynamic> item) {
+    final key=id(item),isLiked=liked.contains(key);
+    return Padding(padding:const EdgeInsets.only(bottom:21),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Padding(padding:const EdgeInsets.symmetric(horizontal:14,vertical:9),
+          child:Row(children:[
+            CreatorPortrait(name:str(item['creator']),imageUrl:avatar(item),radius:18),
+            const SizedBox(width:8),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+              children:[
+                Text(str(item['creator']),style:const TextStyle(
+                  color:navy,fontWeight:FontWeight.w800,fontSize:13)),
+                Text(str(item['handle']),style:const TextStyle(
+                  color:slate,fontSize:11))
+              ])),
+            if(isDemo(item))pill('DEMO',coral),
+            TextButton(onPressed:()=>follow(item),
+              child:Text(following.contains(followKey(item))?'Following':'Follow'))
+          ])),
+        AspectRatio(aspectRatio:1.06,
+          child:SocialMediaStage(
+            thumbnailUrl:image(item),previewUrl:null,
+            active:false,onTap:()=>play(item),
+            onDoubleTap:()=>doubleTapLike(item))),
+        const SizedBox(height:9),
+        Padding(padding:const EdgeInsets.symmetric(horizontal:11),
+          child:Row(children:[
+            actionIcon(isLiked?Icons.favorite_rounded:Icons.favorite_border_rounded,
+              compact(item['likes']),()=>like(item),active:isLiked),
+            actionIcon(Icons.mode_comment_outlined,
+              compact(item['comments']),()=>openComments(item)),
+            actionIcon(Icons.share_rounded,'',()=>share(item)),
+            const Spacer(),
+            actionIcon(saved.contains(key)?Icons.bookmark_rounded:Icons.bookmark_border_rounded,
+              '',()=>save(item),active:saved.contains(key))
+          ])),
+        Padding(padding:const EdgeInsets.symmetric(horizontal:15,vertical:4),
+          child:Text(str(item['title']),style:const TextStyle(
             color:navy,fontSize:17,fontWeight:FontWeight.w900))),
-          pill(str(item['category']),navy)
-        ]),
-        const SizedBox(height:4),
-        Text(str(item['description']),style:const TextStyle(
-          color:slate,fontSize:12,height:1.45)),
-        const SizedBox(height:12),
-        Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
-          actionIcon(liked.contains(key)?Icons.favorite_rounded:Icons.favorite_border_rounded,
-            compact(item['likes']),()=>like(item),active:liked.contains(key)),
-          actionIcon(Icons.chat_bubble_outline_rounded,
-            compact(item['comments']),()=>openComments(item)),
-          actionIcon(Icons.share_outlined,'Share',()=>share(item)),
-          actionIcon(saved.contains(key)?Icons.bookmark_rounded:Icons.bookmark_border_rounded,
-            '',()=>save(item),active:saved.contains(key))
-        ])
-      ]),pad:const EdgeInsets.all(12)));
+        Padding(padding:const EdgeInsets.symmetric(horizontal:15),
+          child:Text(str(item['description']),maxLines:2,
+            style:const TextStyle(color:slate,fontSize:12))),
+      ]));
   }
 
   Future<void> share(Map<String,dynamic> item) async {
