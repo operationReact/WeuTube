@@ -1,33 +1,40 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weutube/main.dart';
-import 'package:weutube/product_ui.dart' show WeuTubeBrand, WeuTubeBrandIcon;
+import 'package:weutube/product_ui.dart' show WeuTubeBrand;
 
 void main() {
-  testWidgets('landing displays WeuTube brand and onboarding', (tester) async {
+  testWidgets('opens social Home directly with a populated feed', (tester) async {
     await tester.pumpWidget(const WeuTubeApp());
-    // The approved master artwork is one vector, never separately typeset text.
-    expect(find.byType(WeuTubeBrand), findsWidgets);
-    expect(find.byType(WeuTubeBrandIcon), findsNothing);
-    expect(find.text('Create Account'), findsWidgets);
-    expect(find.text('Sign In'), findsWidgets);
-    expect(find.text('Built for creators'), findsOneWidget);
+    expect(find.byType(WeuTubeBrand), findsOneWidget);
+    expect(find.text('Find your next spark.'), findsOneWidget);
+    expect(find.text('Fresh from the community'), findsOneWidget);
+    expect(find.text('Home'), findsWidgets);
+    expect(find.text('Explore'), findsWidgets);
+    expect(find.text('Shorts'), findsWidgets);
+    expect(find.text('Create'), findsWidgets);
   });
 
-  testWidgets('sign in opens real authentication form', (tester) async {
+  testWidgets('Explore has discovery without forcing login', (tester) async {
     await tester.pumpWidget(const WeuTubeApp());
-    await tester.tap(find.text('Sign In').first);
+    await tester.tap(find.text('Explore').first);
+    await tester.pump();
+    expect(find.text('Explore your world'), findsOneWidget);
+    expect(find.text('Trending discoveries'), findsOneWidget);
+  });
+
+  testWidgets('Sign-in is available when a person wants to create', (tester) async {
+    await tester.pumpWidget(const WeuTubeApp());
+    await tester.tap(find.text('Create').last);
+    await tester.pump();
+    expect(find.text('Create something great.'), findsOneWidget);
+    await tester.tap(find.text('Sign in to upload'));
     await tester.pumpAndSettle();
     expect(find.text('Welcome Back'), findsOneWidget);
     expect(find.text('Email Address'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
-  });
-
-  testWidgets('create account has name email and password', (tester) async {
-    await tester.pumpWidget(const WeuTubeApp());
-    await tester.tap(find.text('Create Account').first);
+    await tester.tap(find.text('New creator? Create Account'));
     await tester.pumpAndSettle();
     expect(find.text('Full Name'), findsOneWidget);
-    expect(find.text('Email Address'), findsOneWidget);
-    expect(find.text('Password'), findsOneWidget);
   });
 }
