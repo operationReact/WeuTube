@@ -18,6 +18,7 @@ public class GoogleYouTubeClient {
  private static final String CHANNEL_ENDPOINT="https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true";
  private static final String SCOPE_UPLOAD="https://www.googleapis.com/auth/youtube.upload";
  private static final String SCOPE_READ="https://www.googleapis.com/auth/youtube.readonly";
+ private static final String SCOPE_PUBLISH="https://www.googleapis.com/auth/youtube.force-ssl";
  private final RestClient http;
  private final String clientId;
  private final String clientSecret;
@@ -102,7 +103,7 @@ public class GoogleYouTubeClient {
   String refresh=response.path("refresh_token").asText("");
   List<String> granted=Arrays.asList(response.path("scope").asText("").split(" "));
   if (access.isBlank() || refresh.isBlank()
-      || !granted.contains(SCOPE_UPLOAD) || !granted.contains(SCOPE_READ))
+      || !granted.contains(SCOPE_UPLOAD) || !granted.contains(SCOPE_READ) || !granted.contains(SCOPE_PUBLISH))
    throw new ProviderException("Required YouTube OAuth credentials or scopes not granted");
   return new Tokens(access,refresh);
  }
