@@ -16,16 +16,16 @@ class SocialFeedControllerTest {
   when(jdbc.query(anyString(),any(RowMapper.class),eq(20))).thenReturn(List.of());
   var result=controller.feed("","All",20,true);
   assertEquals(0,result.realCount());
-  assertEquals(5,result.demoCount());
+  assertEquals(12,result.demoCount());
   assertTrue(result.demoContentIncluded());
   assertTrue(result.items().stream().allMatch(SocialFeedController.FeedItem::demo));
   assertTrue(result.items().stream().allMatch(i->i.id().startsWith("demo-")));
  }
  @Test void discoveryFiltersDemoWithoutInventingRealPublication() {
   when(jdbc.query(anyString(),any(RowMapper.class),eq(20))).thenReturn(List.of());
-  var result=controller.feed("island","Travel",20,true);
+  var result=controller.feed("grandmother","Food",20,true);
   assertEquals(1,result.items().size());
-  assertEquals("demo-ocean",result.items().get(0).id());
+  assertEquals("demo-food",result.items().get(0).id());
   assertEquals(0,result.realCount());
  }
  @Test void noFixtureModeNeverLeaksDemoIntoRealFeed() {
