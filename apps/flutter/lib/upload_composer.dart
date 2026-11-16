@@ -139,10 +139,12 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
       _channels = [];
       _channel = null;
     });
+    var identityVerified = false;
     try {
       // First validate Cognito independently of the channel grant lookup.
       // No grant should be an authenticated empty state, never a 403.
       final session = await widget.api.creatorSession();
+      identityVerified = true;
       if(!mounted) return;
       final access = session['uploadAccess']?.toString();
       if(access == 'NO_CHANNEL_GRANT' || access == 'CHANNEL_NOT_CONNECTED') {
@@ -170,11 +172,14 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
       setState(() {
         _access = ex.code == 401 || ex.code == 403
           ? UploadAccess.denied : UploadAccess.failed;
-        _error = ex.code == 401 || ex.code == 403
-          ? 'Your current sign-in was rejected by the API (HTTP ${ex.code}). '
-            'Sign in again to renew your session. If it continues, '
-            'the backend Cognito token validation needs investigation.'
-          : ex.message;
+        _error = ex.code == 403 && identityVerified
+          ? 'Your sign-in is valid, but the channel authorization request '
+            'was denied (HTTP 403). Check backend channel endpoint permissions.'
+          : ex.code == 401 || ex.code == 403
+            ? 'Your current sign-in was rejected by the API (HTTP ${ex.code}). '
+              'Sign in again. If it continues, backend Cognito token '
+              'validation needs investigation.'
+            : ex.message;
       });
     } catch (_) {
       if (mounted) setState(() {
