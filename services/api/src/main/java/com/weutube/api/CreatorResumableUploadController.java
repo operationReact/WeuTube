@@ -116,6 +116,17 @@ public class CreatorResumableUploadController {
   if(!"DRAFT".equals(draft.status()))
    throw conflict("Only draft videos can start uploading");
 
+  // Platform-owned Google quota is shared. Do not allow one account to
+  // exhaust upload capacity for all creators. Existing sessions are exempt
+  // so resuming a video never counts as another upload.
+  Long recentUploads=jdbc.queryForObject("""
+    SELECT COUNT(*) FROM youtube_resumable_uploads
+    WHERE creator_sub=? AND created_at>=now()-interval '24 hours'
+    """,Long.class,jwt.getSubject());
+  if(recentUploads!=null && recentUploads>=10L)
+   throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+     "You have reached the limit of 10 new videos in 24 hours");
+
   UUID id=UUID.randomUUID();
   int inserted=jdbc.update("""
     INSERT INTO youtube_resumable_uploads

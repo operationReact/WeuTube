@@ -10,7 +10,8 @@ on:
     paths:
       - '.github/workflows/deploy-api.yml'
       - 'apps/flutter/**'
-      - 'deploy/Caddyfile'
+      - 'services/api/**'
+      - 'deploy/**'
 permissions:
   contents: read
   id-token: write

@@ -149,12 +149,31 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
       identityVerified = true;
       if(!mounted) return;
       final access = session['uploadAccess']?.toString();
-      if(access == 'NO_CHANNEL_GRANT' || access == 'CHANNEL_NOT_CONNECTED') {
+      if(access == 'CHANNEL_NOT_CONNECTED') {
         setState(() {
           _access = UploadAccess.noChannel;
           _channelAccessReason = access;
         });
         return;
+      }
+      if(access == 'NO_CHANNEL_GRANT') {
+        // A server-owned, private-review channel can be activated only when
+        // the operator has opted in, exactly one OAuth channel is connected,
+        // and this creator has not been explicitly blocked by an admin.
+        // Failure is a channel-access state, not a broken Cognito sign-in.
+        try {
+          await widget.api.activateCreatorChannel();
+        } on ApiFailure catch (failure) {
+          if (!mounted) return;
+          setState(() {
+            _access = UploadAccess.noChannel;
+            _channelAccessReason = failure.code == 503
+              ? 'CHANNEL_SETUP_REQUIRED'
+              : 'NO_CHANNEL_GRANT';
+            _error = failure.message;
+          });
+          return;
+        }
       }
       final granted = await widget.api.grantedChannels();
       if (!mounted) return;
@@ -582,12 +601,18 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
           else if (_access == UploadAccess.noChannel)
             _blocked(
               _channelAccessReason == 'CHANNEL_NOT_CONNECTED'
-                ? 'YouTube channel disconnected' : 'Channel permission needed',
+                ? 'YouTube channel disconnected'
+                : _channelAccessReason == 'CHANNEL_SETUP_REQUIRED'
+                  ? 'YouTube channel setup pending' : 'Channel permission needed',
               _channelAccessReason == 'CHANNEL_NOT_CONNECTED'
                 ? 'Your account already has permission to use a channel, '
                   'but its YouTube connection is unavailable. The channel '
                   'owner needs to reconnect it in the Admin panel. '
                   'Your sign-in is working; signing in again will not fix this.'
+                : _channelAccessReason == 'CHANNEL_SETUP_REQUIRED'
+                  ? 'The app is signed in, but the platform YouTube channel '
+                    'has not completed Google authorization. A channel '
+                    'administrator must connect it before private uploads can start.'
                 : 'You are signed in successfully. Uploading is currently '
                   'restricted to YouTube channels authorized by a WeuTube '
                   'administrator. Ask an administrator to connect a channel '

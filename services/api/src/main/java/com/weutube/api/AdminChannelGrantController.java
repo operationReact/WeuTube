@@ -64,6 +64,9 @@ public class AdminChannelGrantController {
    if(count==null || count==0)
     throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Creator or connected channel not found");
   }
+  // Explicit admin approval clears any earlier automatic-access revocation.
+  jdbc.update("DELETE FROM creator_channel_auto_upload_blocks WHERE creator_sub=? AND youtube_channel_id=?",
+    input.creatorSubject(),channelId);
   return Map.of("creatorSubject",input.creatorSubject(),"channelId",channelId,"status","granted");
  }
  @DeleteMapping("/{channelId}/creators/{creatorSubject}")
@@ -72,6 +75,12 @@ public class AdminChannelGrantController {
  public void revoke(@AuthenticationPrincipal Jwt jwt,
     @PathVariable String channelId,@PathVariable String creatorSubject) {
   requireAdmin(jwt);
+  jdbc.update("""
+   INSERT INTO creator_channel_auto_upload_blocks(creator_sub,youtube_channel_id,blocked_by_sub)
+     SELECT ?,y.youtube_channel_id,? FROM youtube_channels y WHERE y.youtube_channel_id=?
+   ON CONFLICT(creator_sub,youtube_channel_id)
+     DO UPDATE SET blocked_by_sub=EXCLUDED.blocked_by_sub,blocked_at=now()
+   """,creatorSubject,jwt.getSubject(),channelId);
   jdbc.update("""
    DELETE FROM creator_channel_grants WHERE youtube_channel_id=?
    AND creator_id IN (SELECT id FROM creators WHERE cognito_sub=?)
