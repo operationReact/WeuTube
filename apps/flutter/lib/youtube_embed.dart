@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
@@ -140,23 +141,26 @@ class _WeuTubeYoutubeStageState extends State<WeuTubeYoutubeStage>
       ]);
     }
 
-    return Column(children: [
-      // This is the unmodified YouTube embedded player. No overlays, custom
-      // tap handlers, frames or decorative masks are placed on its surface.
-      YoutubePlayer(
+    if (_error != null) {
+      return ColoredBox(color: navy,
+        child: Center(child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(_error!, textAlign: TextAlign.center,
+            style: const TextStyle(color: coral, fontSize: 12)))));
+    }
+    // This is the unmodified YouTube embedded player. No overlays, custom
+    // tap handlers, frames or decorative masks are placed on its surface.
+    // Match the parent viewport so even narrow mobile cards remain >=200px
+    // tall (YouTube's official minimum player size).
+    return LayoutBuilder(builder: (context, bounds) {
+      final ratio = math.max(1.0, bounds.maxWidth / math.max(200.0, bounds.maxHeight));
+      return YoutubePlayer(
         controller: controller,
-        aspectRatio: 16 / 9,
+        aspectRatio: ratio,
         enableFullScreenOnVerticalDrag: false,
         autoFullScreen: false,
         backgroundColor: navy,
-      ),
-      if (_error != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          child: Text(_error!,
-            style: const TextStyle(color: coral, fontSize: 11),
-            textAlign: TextAlign.center),
-        ),
-    ]);
+      );
+    });
   }
 }
