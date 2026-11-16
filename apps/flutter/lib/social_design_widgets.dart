@@ -82,96 +82,201 @@ class SocialMediaStage extends StatefulWidget {
   @override
   State<SocialMediaStage> createState()=>_SocialMediaStageState();
 }
-class _SocialMediaStageState extends State<SocialMediaStage> {
+class _SocialMediaStageState extends State<SocialMediaStage>
+    with WidgetsBindingObserver {
   VideoPlayerController? player;
-  bool ready=false,failed=false;
-  int epoch=0;
+  bool ready = false, failed = false, muted = true, manuallyPaused = false;
+  int epoch = 0;
+
   @override
-  void initState(){super.initState();_switch();}
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _switch();
+  }
+
   @override
   void didUpdateWidget(covariant SocialMediaStage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if(oldWidget.active!=widget.active || oldWidget.previewUrl!=widget.previewUrl) {
+    if (oldWidget.active != widget.active ||
+        oldWidget.previewUrl != widget.previewUrl) {
       _switch();
     }
   }
-  void _switch(){
-    final ticket=++epoch;
-    final old=player;player=null;ready=false;failed=false;
-    if(old!=null){
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = player;
+    if (controller == null || !ready) return;
+    if (state != AppLifecycleState.resumed) {
+      controller.pause();
+    } else if (widget.active && !manuallyPaused) {
+      controller.setVolume(muted ? 0 : 1);
+      controller.play();
+    }
+  }
+
+  void _switch() {
+    final ticket = ++epoch;
+    final old = player;
+    player = null;
+    ready = false;
+    failed = false;
+    muted = true;
+    manuallyPaused = false;
+    if (old != null) {
       old.pause();
       old.dispose();
     }
-    final raw=widget.previewUrl;
-    final uri=raw==null?null:Uri.tryParse(raw);
+    final raw = widget.previewUrl;
+    final uri = raw == null ? null : Uri.tryParse(raw);
     // Only the trusted sample-video CDN is eligible for inline playback.
-    if(!widget.active || uri==null || uri.scheme!='https' ||
-        uri.host!='storage.googleapis.com')return;
-    final controller=VideoPlayerController.networkUrl(uri);
-    player=controller;
+    // Published videos still use their validated public YouTube link.
+    if (!widget.active || uri == null || uri.scheme != 'https' ||
+        uri.host != 'storage.googleapis.com') return;
+
+    final controller = VideoPlayerController.networkUrl(uri);
+    player = controller;
     () async {
-      try{
+      try {
         await controller.initialize();
-        if(!mounted||ticket!=epoch){await controller.dispose();return;}
+        if (!mounted || ticket != epoch) {
+          await controller.dispose();
+          return;
+        }
         await controller.setVolume(0);
         await controller.setLooping(true);
         await controller.play();
-        if(mounted&&ticket==epoch)setState(()=>ready=true);
-      } catch(_){
-        if(mounted&&ticket==epoch)setState(()=>failed=true);
+        if (mounted && ticket == epoch) setState(() => ready = true);
+      } catch (_) {
+        if (mounted && ticket == epoch) setState(() => failed = true);
       }
     }();
   }
+
+  // First tap enables audio; later taps pause/resume. The audio control
+  // remains available to re-mute without interrupting playback.
+  Future<void> _handleTap() async {
+    final controller = player;
+    if (!ready || controller == null) {
+      widget.onTap();
+      return;
+    }
+    try {
+      if (muted) {
+        await controller.setVolume(1);
+        if (mounted && identical(controller, player)) {
+          setState(() => muted = false);
+        }
+      } else if (controller.value.isPlaying) {
+        await controller.pause();
+        if (mounted && identical(controller, player)) {
+          setState(() => manuallyPaused = true);
+        }
+      } else {
+        await controller.play();
+        if (mounted && identical(controller, player)) {
+          setState(() => manuallyPaused = false);
+        }
+      }
+    } catch (_) {
+      widget.onTap();
+    }
+  }
+
+  Future<void> _toggleMute() async {
+    final controller = player;
+    if (!ready || controller == null) return;
+    final next = !muted;
+    try {
+      await controller.setVolume(next ? 0 : 1);
+      if (mounted && identical(controller, player)) {
+        setState(() => muted = next);
+      }
+    } catch (_) {
+      // The current preview may have been disposed while the tap completed.
+    }
+  }
+
   @override
-  void dispose(){
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     epoch++;
     player?.dispose();
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) {
-    final controller=player;
+    final controller = player;
+    final playing = ready && controller != null && !manuallyPaused;
     return GestureDetector(
-      onTap:widget.onTap,
-      onDoubleTap:widget.onDoubleTap,
-      child:Stack(fit:StackFit.expand,children:[
-        Container(color:const Color(0xFF15254A),
-          child:Image.network(widget.thumbnailUrl,
-            fit:BoxFit.cover,
-            errorBuilder:(_,__,___)=>const Center(
-              child:Icon(Icons.landscape_rounded,color:Colors.white54,size:70)))),
-        if(ready&&controller!=null&&controller.value.isInitialized)
-          LayoutBuilder(builder:(context,constraints){
-            final size=controller.value.size;
-            if(size.width==0||size.height==0)return const SizedBox.shrink();
-            return ClipRect(child:FittedBox(fit:BoxFit.cover,
-              child:SizedBox(width:size.width,height:size.height,
-                child:VideoPlayer(controller))));
+      onTap: _handleTap,
+      onDoubleTap: widget.onDoubleTap,
+      child: Stack(fit: StackFit.expand, children: [
+        Container(
+          color: const Color(0xFF15254A),
+          child: Image.network(widget.thumbnailUrl, fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const Center(
+              child: Icon(Icons.landscape_rounded,
+                color: Colors.white54, size: 70)))),
+        if (ready && controller != null && controller.value.isInitialized)
+          LayoutBuilder(builder: (context, constraints) {
+            final size = controller.value.size;
+            if (size.width == 0 || size.height == 0) {
+              return const SizedBox.shrink();
+            }
+            return ClipRect(child: FittedBox(fit: BoxFit.cover,
+              child: SizedBox(width: size.width, height: size.height,
+                child: VideoPlayer(controller))));
           }),
-        if(widget.immersive)
-          const DecoratedBox(decoration:BoxDecoration(
-            gradient:LinearGradient(
-              begin:Alignment.topCenter,end:Alignment.bottomCenter,
-              stops:[0,.28,.52,1],
-              colors:[Color(0x55000000),Colors.transparent,
-                Color(0x30000000),Color(0xD9000000)]))),
-        if(!ready||failed||widget.previewUrl==null)
-          Center(child:Container(
-            padding:const EdgeInsets.all(13),
-            decoration:BoxDecoration(color:Colors.white.withValues(alpha:.93),
-              shape:BoxShape.circle),
-            child:const Icon(Icons.play_arrow_rounded,color:coral,size:32))),
-        if(ready)
-          Positioned(top:12,right:12,child:Container(
-            padding:const EdgeInsets.symmetric(horizontal:8,vertical:5),
-            decoration:BoxDecoration(color:Colors.black.withValues(alpha:.48),
-              borderRadius:BorderRadius.circular(18)),
-            child:const Row(mainAxisSize:MainAxisSize.min,children:[
-              Icon(Icons.volume_off_rounded,color:Colors.white,size:14),
-              SizedBox(width:4),
-              Text('Preview',style:TextStyle(color:Colors.white,
-                fontSize:10,fontWeight:FontWeight.w700))
-            ]))),
+        if (widget.immersive)
+          const DecoratedBox(decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter, end: Alignment.bottomCenter,
+              stops: [0, .28, .52, 1],
+              colors: [Color(0x55000000), Colors.transparent,
+                Color(0x30000000), Color(0xD9000000)]))),
+        if (!playing)
+          Center(child: Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .93),
+              shape: BoxShape.circle),
+            child: const Icon(Icons.play_arrow_rounded,
+              color: coral, size: 32))),
+        if (ready && controller != null)
+          Positioned(top: 12, right: 12,
+            child: Semantics(
+              button: true,
+              label: muted ? 'Unmute video' : 'Mute video',
+              child: Material(color: Colors.transparent,
+                child: InkWell(
+                  onTap: _toggleMute,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: .55),
+                      borderRadius: BorderRadius.circular(20)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(muted ? Icons.volume_off_rounded
+                        : Icons.volume_up_rounded,
+                        color: Colors.white, size: 16),
+                      const SizedBox(width: 4),
+                      Text(muted ? 'Tap to unmute' : 'Sound on',
+                        style: const TextStyle(color: Colors.white,
+                          fontSize: 10, fontWeight: FontWeight.w700))
+                    ]))))),
+        if (ready && controller != null)
+          Positioned(bottom: 0, left: 0, right: 0,
+            child: VideoProgressIndicator(controller,
+              allowScrubbing: true,
+              colors: VideoProgressColors(
+                playedColor: coral,
+                bufferedColor: Colors.white38,
+                backgroundColor: Colors.white24)))
       ]));
   }
 }
