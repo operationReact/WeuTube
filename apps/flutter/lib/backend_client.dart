@@ -190,7 +190,7 @@ class WeuTubeApi {
   Future<List<Map<String,dynamic>>> comments(String videoId) async {
     // Published comments are public; writing still requires Cognito login.
     final result=await call('GET',
-      '/api/social/videos/'+Uri.encodeComponent(videoId)+'/comments',auth:false);
+      '/api/public/social/videos/'+Uri.encodeComponent(videoId)+'/comments',auth:false);
     return (result is List ? result : <dynamic>[])
       .whereType<Map<String,dynamic>>().toList();
   }
