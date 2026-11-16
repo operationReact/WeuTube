@@ -18,9 +18,9 @@ public class CreatorVideoController {
  public CreatorVideoController(CreatorRepository creators,VideoRepository videos) {
   this.creators=creators; this.videos=videos;
  }
- public record DraftRequest(@NotBlank @Size(max=200) String title) {}
- public record DraftMetadata(@NotBlank @Size(max=100) String title,
-   @Size(max=2000) String description,@NotBlank @Size(max=50) String category) {}
+ public record DraftRequest(@NotBlank String title) {}
+ public record DraftMetadata(@NotBlank String title,
+   @Size(max=5000) String description,@NotBlank @Size(max=50) String category) {}
  private static final java.util.Set<String> CATEGORIES=java.util.Set.of(
    "Travel","Art","Lifestyle","Storytelling","Education","Entertainment",
    "Technology","Stories");
@@ -28,13 +28,13 @@ public class CreatorVideoController {
  @Transactional
  public VideoResponse metadata(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
     @PathVariable UUID id,@Valid @RequestBody DraftMetadata input) {
-  String title=input.title().trim(),category=input.category().trim();
+  String title=YouTubeUploadConstraints.validatedTitle(input.title()),category=input.category().trim();
   if(title.isEmpty()||!CATEGORIES.contains(category))
    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid title or category");
   VideoSubmission video=ownedDraft(jwt,id);
   video.title=title;
   video.category=category;
-  video.description=input.description()==null?"":input.description().trim();
+  video.description=YouTubeUploadConstraints.validatedDescription(input.description());
   video.updatedAt=java.time.Instant.now();
   videos.save(video);
   return new VideoResponse(video.id,video.title,video.status);
@@ -67,7 +67,7 @@ public class CreatorVideoController {
  @Transactional
  public VideoResponse renameDraft(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
    @PathVariable UUID id, @Valid @RequestBody DraftRequest request) {
-  String title=request.title().trim();
+  String title=YouTubeUploadConstraints.validatedTitle(request.title());
   if (title.isEmpty())
     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Title cannot be blank");
   VideoSubmission video=ownedDraft(jwt,id);

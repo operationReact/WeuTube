@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'backend_client.dart';
+import 'youtube_upload_rules.dart';
 import 'product_ui.dart' show navy, coral, slate;
 
 enum UploadAccess { signedOut, checking, ready, noChannel, denied, failed }
@@ -26,7 +27,7 @@ class WeuTubeUploadComposer extends StatefulWidget {
 }
 
 class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
-  static const maxBytes = 256 * 1024 * 1024;
+  static const maxBytes = YouTubeUploadRules.directGatewayMaxBytes;
   static const categories = [
     'Travel', 'Art', 'Lifestyle', 'Storytelling', 'Education',
     'Entertainment', 'Technology', 'Stories',
@@ -122,15 +123,31 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
   Future<void> _chooseVideo() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.video,
+        // OS 'video' pickers often hide YouTube-supported AVI/WMV/MPEG.
+        // We validate the selected extension before enabling submission.
+        type: FileType.any,
         withData: false,
         withReadStream: true,
         allowMultiple: false,
       );
       if (result == null || result.files.isEmpty || !mounted) return;
       final file = result.files.first;
+      if (YouTubeUploadRules.mimeForFilename(file.name) == null) {
+        setState(() {
+          _file = null;
+          _error = 'Unsupported container. Choose MP4, MOV, MPEG, AVI, '
+            'WMV, FLV, 3GPP or WebM. ProRes/HEVC codecs need a '
+            'supported video container.';
+        });
+        return;
+      }
       if (file.size <= 0 || file.size > maxBytes) {
-        setState(() => _error = 'Choose a video smaller than 256 MB.');
+        setState(() {
+          _file = null;
+          _error = 'The current WeuTube direct uploader supports up to '
+            '256 MiB per file. YouTube supports up to 256 GB or 12 hours; '
+            'larger uploads need the new resumable upload infrastructure.';
+        });
         return;
       }
       if (file.readStream == null && file.bytes == null) {
@@ -309,7 +326,7 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
                       fontSize: 15,fontWeight: FontWeight.w800)),
                   const SizedBox(height: 5),
                   Text(_file == null
-                    ? 'MP4, MOV or WebM · up to 256 MB'
+                    ? 'YouTube formats · current direct upload: 256 MiB'
                     : '${(_file!.size / (1024 * 1024)).toStringAsFixed(1)} MB · Tap to change',
                     style: const TextStyle(color: slate,fontSize: 12)),
                 ])),
@@ -320,22 +337,19 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
         TextFormField(
           key: const ValueKey('upload-video-title'),
           controller: _title,
-          maxLength: 100,
+          maxLength: YouTubeUploadRules.titleMaxChars,
           maxLines: 1,
           textInputAction: TextInputAction.next,
           decoration: _decoration('Give your video a title'),
-          validator: (v) {
-            final text = (v ?? '').trim();
-            if (text.isEmpty) return 'Enter a title';
-            if (text.length > 100) return 'Use 100 characters or fewer';
-            return null;
-          }),
+          validator: (v) => YouTubeUploadRules.titleError(v ?? '')),
         const SizedBox(height: 10),
         _fieldLabel('Description (optional)'),
         TextFormField(
           controller: _description,
-          minLines: 2,maxLines: 3,maxLength: 2000,
-          decoration: _decoration('Tell viewers what this video is about')),
+          minLines: 2,maxLines: 3,
+          maxLength: YouTubeUploadRules.descriptionMaxUtf8Bytes,
+          decoration: _decoration('Tell viewers what this video is about'),
+          validator: (v) => YouTubeUploadRules.descriptionError(v ?? '')),
         const SizedBox(height: 10),
         _fieldLabel('Category'),
         DropdownButtonFormField<String>(
@@ -363,7 +377,9 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
             (value) => setState(() => _channel = value)),
         const SizedBox(height: 16),
         _info('Your video is uploaded privately to the authorized YouTube '
-          'channel, then reviewed by WeuTube before publishing.'),
+          'channel, then reviewed by WeuTube before publishing. '
+          'YouTube supports videos up to 12 hours/256 GB on eligible channels; '
+          'the current WeuTube direct gateway is limited to 256 MiB.'),
         if (_error != null) ...[
           const SizedBox(height: 12),
           _info(_error!, warning: true),
