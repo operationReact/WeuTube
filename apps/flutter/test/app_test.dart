@@ -27,6 +27,8 @@ void main() {
     await tester.tap(find.text('Create').last);
     await tester.pump();
     expect(find.text('Create something great.'), findsOneWidget);
+    await tester.ensureVisible(find.text('Sign in to upload'));
+    await tester.pump();
     await tester.tap(find.text('Sign in to upload'));
     await tester.pumpAndSettle();
     expect(find.text('Welcome Back'), findsOneWidget);
