@@ -23,6 +23,17 @@ class WeuTubeApi {
   String? accessToken;
   String? refreshToken;
   bool get signedIn => accessToken != null;
+  // UI-only flag. Every admin API independently validates Cognito group membership.
+  bool get showAdminMenu {
+    try {
+      final parts=accessToken?.split('.');
+      if(parts==null || parts.length!=3) return false;
+      final payload=jsonDecode(utf8.decode(base64Url.decode(
+        base64Url.normalize(parts[1])))) as Map<String,dynamic>;
+      final groups=payload['cognito:groups'];
+      return groups is List && groups.contains('weutube-admin');
+    } catch (_) { return false; }
+  }
   Uri uri(String path) => Uri.parse(apiOrigin + path);
 
   Future<dynamic> call(String method, String path,
@@ -157,5 +168,24 @@ class WeuTubeApi {
         '. Confirm channel permission before retrying.');
     return asMap(jsonDecode(response.body));
   }
+  Future<List<Map<String,dynamic>>> reviewQueue() => list('/api/admin/reviews/queue');
+  Future<Map<String,dynamic>> reviewDecision(String id,String decision,String reason) async =>
+    asMap(await call('POST','/api/admin/reviews/'+Uri.encodeComponent(id)+'/decision',
+      data:{'decision':decision,'reason':reason}));
+  Future<List<Map<String,dynamic>>> adminChannels() => list('/api/admin/youtube/channels');
+  Future<Map<String,dynamic>> channelAuthorization() async =>
+    asMap(await call('POST','/api/admin/youtube/authorization'));
+  Future<Map<String,dynamic>> grantChannel(String id,String creatorSubject) async =>
+    asMap(await call('POST','/api/admin/channels/'+Uri.encodeComponent(id)+'/creators',
+      data:{'creatorSubject':creatorSubject}));
+  Future<List<Map<String,dynamic>>> pendingPublication() => list('/api/admin/videos/approved');
+  Future<Map<String,dynamic>> publishVideo(String id) async =>
+    asMap(await call('POST','/api/admin/videos/'+Uri.encodeComponent(id)+'/publish'));
+  Future<Map<String,dynamic>> reconcilePublish(String id) async =>
+    asMap(await call('POST','/api/admin/videos/'+Uri.encodeComponent(id)+'/reconcile-publish'));
+  Future<List<Map<String,dynamic>>> payoutQueue() => list('/api/admin/payouts/queue');
+  Future<Map<String,dynamic>> payoutDecision(String id,String decision,String reason) async =>
+    asMap(await call('POST','/api/admin/payouts/'+Uri.encodeComponent(id)+'/decision',
+      data:{'decision':decision,'reason':reason}));
   void dispose() => _client.close();
 }
