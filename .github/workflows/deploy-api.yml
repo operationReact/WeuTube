@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/deploy-api.yml'
+      - 'apps/flutter/**'
 permissions:
   contents: read
   id-token: write
@@ -68,7 +69,7 @@ jobs:
       - name: Test and build Flutter website
         working-directory: apps/flutter
         run: |
-          flutter create --platforms=web --org com.weutube .
+          flutter create --platforms=web,android --org com.weutube .
           python3 -m venv /tmp/weutube-brand-venv
           /tmp/weutube-brand-venv/bin/pip install --quiet 'cairosvg>=2.7,<3' 'Pillow>=10,<13'
           /tmp/weutube-brand-venv/bin/python tool/generate_brand_icons.py
@@ -77,6 +78,21 @@ jobs:
           flutter analyze --no-fatal-infos
           flutter test
           flutter build web --release
+          # Test-only Android package, signed by the ephemeral debug key.
+          # Never confuse this with a Play Store production release.
+          flutter build apk --debug
+          mkdir -p build/web/downloads
+          cp build/app/outputs/flutter-apk/app-debug.apk build/web/downloads/weutube-test.apk
+          test -s build/web/downloads/weutube-test.apk
+          unzip -tq build/web/downloads/weutube-test.apk >/dev/null
+          (cd build/web/downloads && sha256sum weutube-test.apk > weutube-test.apk.sha256)
+      - name: Preserve Android test APK as a CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weutube-android-test-${{ github.run_number }}
+          path: apps/flutter/build/web/downloads/weutube-test.apk
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload immutable production release
         run: |
           set -euo pipefail
@@ -129,6 +145,8 @@ jobs:
           done
           curl --fail --silent --show-error --max-time 15 https://api.weutube.com/actuator/health
           curl --fail --silent --show-error --max-time 15 -o /dev/null https://weutube.com/
+          # Stable APK path must be served from the SAME tested web revision.
+          curl --fail --silent --show-error --head --max-time 15             https://weutube.com/downloads/weutube-test.apk >/dev/null
           curl --fail --silent --show-error --max-time 15 https://api.weutube.com/api/public/status | jq -e '.service == "weutube-api"' >/dev/null
           curl --fail --silent --show-error --max-time 20 'https://api.weutube.com/api/public/social/feed?limit=25' \
             | jq -e '.demoContentIncluded == true and .demoCount >= 12 and
@@ -152,6 +170,8 @@ jobs:
             echo "## WeuTube production HTTPS verified"
             echo "Backend: https://api.weutube.com/actuator/health"
             echo "Website: https://weutube.com/"
+            echo "Android TEST APK (debug-signed, not Play Store ready): https://weutube.com/downloads/weutube-test.apk"
+            echo "SHA-256: https://weutube.com/downloads/weutube-test.apk.sha256"
             echo "Elastic IP: $API_EIP"
             echo "Google OAuth redirect: https://api.weutube.com/api/admin/youtube/callback"
             echo "Immersive social v2, native sharing, guest-readable comments and twelve labelled demo creators deployed; real engagement remains authenticated."
