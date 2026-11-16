@@ -149,6 +149,16 @@ jobs:
           # Stable APK path must be served from the SAME tested web revision.
           curl --fail --silent --show-error --head --max-time 15             https://weutube.com/downloads/weutube-test.apk >/dev/null
           curl --fail --silent --show-error --max-time 15 https://api.weutube.com/api/public/status | jq -e '.service == "weutube-api"' >/dev/null
+          # Do not call this successful when private creator routes are
+          # mysteriously returning 403 to unauthenticated/invalid JWTs.
+          # The expected OAuth resource-server response is 401.
+          for path in /api/creator/session /api/creator/dashboard /api/creator/channels; do
+            unauth="$(curl --silent --show-error --max-time 12 -o /dev/null -w '%{http_code}' "https://api.weutube.com$path")"
+            malformed="$(curl --silent --show-error --max-time 12 -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer invalid-token-smoke-test' "https://api.weutube.com$path")"
+            echo "Creator authentication boundary $path: missing=$unauth malformed=$malformed"
+            test "$unauth" = 401 && test "$malformed" = 401
+          done
+
           curl --fail --silent --show-error --max-time 20 'https://api.weutube.com/api/public/social/feed?limit=25' \
             | jq -e '.demoContentIncluded == true and .demoCount >= 12 and
                      (.items | any(.creator == "Aanya Rao")) and
