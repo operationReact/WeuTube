@@ -4,6 +4,11 @@ name: WeuTube API and Flutter web - production HTTPS deployment
 # secret beyond the existing WEUTUBE_TERRAFORM_ROLE_TO_ASSUME is necessary.
 on:
   workflow_dispatch:
+  # Explicit one-time deployment when this workflow itself is updated.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-api.yml'
 permissions:
   contents: read
   id-token: write
@@ -67,7 +72,7 @@ jobs:
           rm -f test/widget_test.dart analysis_options.yaml
           flutter pub get
           flutter analyze --no-fatal-infos
-          flutter test test/app_test.dart
+          flutter test
           flutter build web --release
       - name: Upload immutable production release
         run: |
@@ -129,5 +134,5 @@ jobs:
             echo "Website: https://weutube.com/"
             echo "Elastic IP: $API_EIP"
             echo "Google OAuth redirect: https://api.weutube.com/api/admin/youtube/callback"
-            echo "Note: Flutter account login, uploads and earnings still use prototype UI and must not be presented as live."
+            echo "Note: API-backed UI is deployed; real user flows, YouTube permissions and payouts require live acceptance tests."
           } >> "$GITHUB_STEP_SUMMARY"
