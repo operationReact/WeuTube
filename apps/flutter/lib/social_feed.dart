@@ -735,68 +735,85 @@ class _SocialHubState extends State<SocialHub> {
 
   Widget shorts() {
     if(items.isEmpty)return const Center(child:CircularProgressIndicator());
-    return PageView.builder(controller:shortsPager,
-      scrollDirection:Axis.vertical,
-      onPageChanged:(i)=>setState(()=>shortIndex=i),
+    return PageView.builder(
+      controller:shortsPager,scrollDirection:Axis.vertical,
+      onPageChanged:(index)=>setState(()=>shortIndex=index),
       itemCount:items.length,
       itemBuilder:(context,index) {
         final post=items[index],key=id(post);
         return Stack(fit:StackFit.expand,children:[
-          Container(color:navy,child:Image.network(image(post),
-            fit:BoxFit.cover,errorBuilder:(_,__,___)=>const ColoredBox(
-              color:Color(0xFF142B5B),
-              child:Center(child:Icon(Icons.movie_outlined,
-                color:Colors.white,size:80))))),
-          Container(decoration:BoxDecoration(gradient:LinearGradient(
-            begin:Alignment.topCenter,end:Alignment.bottomCenter,
-            colors:[Colors.black.withValues(alpha:.25),Colors.transparent,
-              Colors.black.withValues(alpha:.84)]))),
-          Positioned(top:23,left:20,right:15,child:Row(children:[
-            const Text('Shorts',style:TextStyle(color:Colors.white,
-              fontSize:22,fontWeight:FontWeight.w900)),
-            const Spacer(),pill('DEMO & REAL',Colors.white)
+          SocialMediaStage(
+            key:ValueKey('shorts-media-$key'),
+            thumbnailUrl:image(post),
+            previewUrl:isDemo(post)?str(post['videoUrl']):null,
+            active:widget.section=='Shorts'&&shortIndex==index,
+            immersive:true,
+            onTap:()=>play(post),
+            onDoubleTap:()=>doubleTapLike(post)),
+          Positioned(top:18,left:17,right:15,child:Row(children:[
+            const Text('Shorts',style:TextStyle(
+              color:Colors.white,fontSize:22,fontWeight:FontWeight.w900)),
+            const Spacer(),
+            pill(isDemo(post)?'DEMO · preview':'PUBLISHED',Colors.white)
           ])),
-          Center(child:IconButton(onPressed:()=>play(post),
-            icon:const Icon(Icons.play_circle_fill_rounded,
-              size:75,color:Colors.white))),
-          Positioned(bottom:30,left:20,right:68,child:Column(
-            crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Positioned(bottom:43,left:16,right:73,
+            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Row(children:[
-                const CircleAvatar(radius:17,backgroundColor:coral,
-                  child:Icon(Icons.people_rounded,color:Colors.white,size:19)),
-                const SizedBox(width:8),
-                Expanded(child:Text(str(post['creator']),style:const TextStyle(
-                  color:Colors.white,fontWeight:FontWeight.w800))),
+                CreatorPortrait(name:str(post['creator']),
+                  imageUrl:avatar(post),radius:21,highlighted:true),
+                const SizedBox(width:9),
+                Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+                  children:[
+                    Text(str(post['creator']),style:const TextStyle(
+                      color:Colors.white,fontSize:15,fontWeight:FontWeight.w900)),
+                    Text(str(post['handle']),style:const TextStyle(
+                      color:Colors.white70,fontSize:11))
+                  ])),
+                InkWell(onTap:()=>follow(post),
+                  child:Container(
+                    padding:const EdgeInsets.symmetric(horizontal:10,vertical:6),
+                    decoration:BoxDecoration(
+                      color:coral,borderRadius:BorderRadius.circular(7)),
+                    child:Text(following.contains(followKey(post))?
+                      'Following':'+ Follow',style:const TextStyle(
+                        color:Colors.white,fontSize:10,fontWeight:FontWeight.w800))))
               ]),
-              const SizedBox(height:10),
-              Text(str(post['title']),style:const TextStyle(
-                color:Colors.white,fontSize:23,fontWeight:FontWeight.w900)),
-              const SizedBox(height:6),
+              const SizedBox(height:14),
+              Text(str(post['title']),maxLines:3,
+                overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:Colors.white,
+                  fontSize:23,height:1.1,fontWeight:FontWeight.w900)),
+              const SizedBox(height:7),
               Text(str(post['description']),maxLines:2,
-                style:const TextStyle(color:Colors.white70,fontSize:12)),
-              if(isDemo(post))const Padding(padding:EdgeInsets.only(top:8),
-                child:Text('SAMPLE VIDEO · preview only',style:TextStyle(
-                  color:Color(0xFFFFB1A6),fontSize:11)))
+                overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:Colors.white,fontSize:12)),
+              const SizedBox(height:10),
+              Row(children:[
+                const Icon(Icons.music_note_rounded,size:14,color:coral),
+                const SizedBox(width:6),
+                Flexible(child:Text(str(post['category'])+' · WeuTube',
+                  style:const TextStyle(color:Colors.white70,
+                    fontSize:11,fontWeight:FontWeight.w600)))
+              ])
             ])),
-          Positioned(right:10,bottom:65,child:Column(children:[
-            _shortAction(liked.contains(key)?Icons.favorite:Icons.favorite_border,
-              compact(post['likes']),()=>like(post)),
-            _shortAction(Icons.mode_comment_outlined,
+          Positioned(right:9,bottom:60,child:Column(children:[
+            _rail(liked.contains(key)?Icons.favorite_rounded:Icons.favorite_border_rounded,
+              compact(post['likes']),()=>like(post),accent:liked.contains(key)),
+            _rail(Icons.mode_comment_outlined,
               compact(post['comments']),()=>openComments(post)),
-            _shortAction(saved.contains(key)?Icons.bookmark:Icons.bookmark_border,
-              'Save',()=>save(post)),
-            _shortAction(Icons.share_outlined,'Share',()=>share(post)),
-          ]))
+            _rail(saved.contains(key)?Icons.bookmark_rounded:Icons.bookmark_border_rounded,
+              'Save',()=>save(post),accent:saved.contains(key)),
+            _rail(Icons.share_rounded,'Share',()=>share(post))
+          ])),
+          const Positioned(top:65,right:15,child:Text('SWIPE TO EXPLORE',
+            style:TextStyle(color:Colors.white70,fontSize:10,
+              fontWeight:FontWeight.w800,letterSpacing:1))),
+          if(showQuickHeart)
+            const Center(child:Icon(Icons.favorite_rounded,
+              color:Colors.white,size:92))
         ]);
       });
   }
-
-  Widget _shortAction(IconData icon,String caption,VoidCallback tap) =>
-    Padding(padding:const EdgeInsets.only(bottom:12),child:Column(children:[
-      IconButton(onPressed:tap,icon:Icon(icon,size:29,color:Colors.white)),
-      Text(caption,style:const TextStyle(color:Colors.white,fontSize:11,
-        fontWeight:FontWeight.w700))
-    ]));
 
   Widget create() => ListView(padding:const EdgeInsets.all(19),children:[
     const SizedBox(height:6),
