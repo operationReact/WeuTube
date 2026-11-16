@@ -15,6 +15,7 @@ import org.springframework.security.oauth2.server.resource.web.access.BearerToke
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -32,7 +33,12 @@ public class SecurityConfig {
   if(!expectedClientId.isBlank()
     && !expectedClientId.equals(token.getClaimAsString("client_id")))
    throw invalidToken();
-  return new JwtAuthenticationToken(token);
+  // The one-argument constructor leaves Authentication.isAuthenticated()
+  // false when there are no mapped scopes. .authenticated() then denies
+  // valid Cognito users with 403 on every /api/creator/** route.
+  // A basic creator role is NOT an admin grant or a YouTube channel grant.
+  return new JwtAuthenticationToken(token,
+    List.of(new SimpleGrantedAuthority("ROLE_CREATOR")));
  }
  @Bean CorsConfigurationSource corsConfigurationSource() {
   var cors=new CorsConfiguration();
