@@ -166,10 +166,22 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body:
       WeuTubeUploadComposer(api: api, onSignIn: () {}, onViewVideos: () {}))));
     await tester.pumpAndSettle();
-    expect(find.text('Channel access required'), findsOneWidget);
-    expect(find.text('Check channel access again'), findsOneWidget);
+    expect(find.text('Channel permission needed'), findsOneWidget);
+    expect(find.text('Refresh channel status'), findsOneWidget);
     expect(find.byKey(const ValueKey('upload-video-title')), findsNothing);
     expect(find.text('Upload privately for review'), findsNothing);
+    api.dispose();
+  });
+
+  testWidgets('Disconnected channel is distinct from a missing grant',
+      (tester) async {
+    final api = _ComposerFakeApi([], disconnected: true);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      WeuTubeUploadComposer(api: api, onSignIn: () {}, onViewVideos: () {}))));
+    await tester.pumpAndSettle();
+    expect(find.text('YouTube channel disconnected'), findsOneWidget);
+    expect(find.textContaining('already has permission'), findsOneWidget);
+    expect(find.byKey(const ValueKey('upload-video-title')), findsNothing);
     api.dispose();
   });
 
@@ -220,20 +232,22 @@ void main() {
 
 class _ComposerFakeApi extends WeuTubeApi {
   _ComposerFakeApi(this.channels, {this.denied = false,
-      this.channelDenied = false}) {
+      this.channelDenied = false, this.disconnected = false}) {
     accessToken = 'test-token';
   }
   final List<Map<String,dynamic>> channels;
   final bool denied;
   final bool channelDenied;
+  final bool disconnected;
   @override
   Future<Map<String,dynamic>> creatorSession() async {
     if (denied) throw const ApiFailure('Access denied.',403);
     return {
       'authenticated': true,
-      'uploadAccess': channels.isEmpty ? 'NO_CHANNEL_GRANT' : 'READY',
-      'channelGranted': channels.isNotEmpty,
-      'channelConnected': channels.isNotEmpty,
+      'uploadAccess': disconnected ? 'CHANNEL_NOT_CONNECTED' :
+        channels.isEmpty ? 'NO_CHANNEL_GRANT' : 'READY',
+      'channelGranted': disconnected || channels.isNotEmpty,
+      'channelConnected': !disconnected && channels.isNotEmpty,
     };
   }
   @override

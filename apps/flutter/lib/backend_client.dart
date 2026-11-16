@@ -390,6 +390,8 @@ class WeuTubeApi {
   Future<List<Map<String,dynamic>>> adminChannels() => list('/api/admin/youtube/channels');
   Future<Map<String,dynamic>> channelAuthorization() async =>
     asMap(await call('POST','/api/admin/youtube/authorization'));
+  Future<Map<String,dynamic>> grantChannelToMyAccount(String id) async =>
+    asMap(await call('POST','/api/admin/channels/'+Uri.encodeComponent(id)+'/grant-me'));
   Future<Map<String,dynamic>> grantChannel(String id,String creatorSubject) async =>
     asMap(await call('POST','/api/admin/channels/'+Uri.encodeComponent(id)+'/creators',
       data:{'creatorSubject':creatorSubject}));

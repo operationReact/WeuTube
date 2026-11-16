@@ -89,6 +89,10 @@ class _WeuTubeAdminPanelState extends State<WeuTubeAdminPanel> {
     }
     toast('Authorize the channel in Google, then refresh the channel list.');
   });
+  Future<void> grantToMe(String channelId) => task(() async {
+    await widget.api.grantChannelToMyAccount(channelId);
+    toast('Upload permission granted to your administrator account. Open Create to upload.');
+  });
   Future<void> grant() => task(() async {
     if(grantChannel.text.trim().isEmpty||grantSub.text.trim().isEmpty) {
       throw const ApiFailure('Channel ID and creator subject are required.');
@@ -115,6 +119,11 @@ class _WeuTubeAdminPanelState extends State<WeuTubeAdminPanel> {
             style:const TextStyle(color:slate,fontSize:12)),
           if(section=='Channels')Text('Channel ID: '+(row['channelId']?.toString()??''),
             style:const TextStyle(color:slate,fontSize:12)),
+          if(section=='Channels' && (row['channelId']?.toString() ?? '').isNotEmpty) ...[
+            const SizedBox(height:10),
+            button('Allow uploads from my account',
+              ()=>grantToMe(row['channelId'].toString()))
+          ],
           if(section=='Payouts')Text('Amount minor units: '+(row['amountMinor']?.toString()??'0'),
             style:const TextStyle(color:slate,fontSize:12)),
           if(section=='Publishing')Text('Channel: '+(row['channelId']?.toString()??''),

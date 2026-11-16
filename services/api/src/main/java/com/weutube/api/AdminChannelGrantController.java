@@ -30,6 +30,16 @@ public class AdminChannelGrantController {
    throw new AccessDeniedException("Admin group required");
  }
  public record GrantRequest(@NotBlank @Size(max=128) String creatorSubject) {}
+
+ /** Admin can grant the connected channel to their own verified creator account,
+  * without copying a Cognito subject into the UI or widening permissions. */
+ @PostMapping("/{channelId}/grant-me")
+ @Transactional
+ public Map<String,String> grantMe(@AuthenticationPrincipal Jwt jwt,
+     @PathVariable String channelId) {
+  requireAdmin(jwt);
+  return grant(jwt,channelId,new GrantRequest(jwt.getSubject()));
+ }
  @PostMapping("/{channelId}/creators")
  @Transactional
  public Map<String,String> grant(@AuthenticationPrincipal Jwt jwt,
