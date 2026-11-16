@@ -132,6 +132,8 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(320, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const WeuTubeApp());
+    expect(tester.takeException(), isNull,
+      reason: 'Home must not overflow before navigating to Explore');
     await tester.tap(find.text('Explore').last);
     await tester.pump();
     expect(tester.takeException(), isNull);
