@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/creator/uploads")
 public class CreatorResumableUploadController {
+ private static final Semaphore TRANSFER_SLOTS = new Semaphore(4,true);
  private final JdbcTemplate jdbc;
  private final YouTubeResumableRelay google;
 
@@ -245,12 +247,17 @@ public class CreatorResumableUploadController {
    throw conflict("Upload is not ready; check session progress before retrying");
   try {YouTubeResumableRanges.requireNextChunk(range,s.acknowledged());}
   catch(IllegalArgumentException ex) {throw conflict("Chunk is not at YouTube-confirmed offset");}
-  int locked=jdbc.update("""
-    UPDATE youtube_resumable_uploads SET status='SENDING',updated_at=now()
-    WHERE id=? AND status='ACTIVE' AND acknowledged_bytes=?
-    """,id,s.acknowledged());
-  if(locked!=1) throw conflict("Upload already sending; check status");
+  // Bound per-request memory usage independently from the video's size.
+  // Busy uploads are retryable; this is not a creator file-size restriction.
+  if(!TRANSFER_SLOTS.tryAcquire()) throw new ResponseStatusException(
+    HttpStatus.TOO_MANY_REQUESTS,"Upload relay busy; retry this chunk");
   try {
+   int locked=jdbc.update("""
+     UPDATE youtube_resumable_uploads SET status='SENDING',updated_at=now()
+     WHERE id=? AND status='ACTIVE' AND acknowledged_bytes=?
+     """,id,s.acknowledged());
+   if(locked!=1) throw conflict("Upload already sending; check status");
+   try {
    // The buffer cannot exceed 8 MiB; there is no multipart tempfile or S3.
    byte[] data=request.getInputStream().readNBytes((int)contentLength+1);
    if(data.length!=contentLength)
@@ -268,6 +275,9 @@ public class CreatorResumableUploadController {
    if(ex instanceof ResponseStatusException status) throw status;
    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
      "Chunk outcome uncertain. Query status before resuming.",ex);
+   }
+  } finally {
+   TRANSFER_SLOTS.release();
   }
  }
 
