@@ -17,6 +17,8 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
   final email = TextEditingController(), password = TextEditingController();
   final fullName = TextEditingController(), code = TextEditingController();
   final title = TextEditingController(), channelId = TextEditingController();
+  final videoDescription = TextEditingController();
+  String videoCategory = 'Travel';
   final displayName = TextEditingController();
   final form = GlobalKey<FormState>();
 
@@ -38,7 +40,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
 
   @override
   void dispose() {
-    for(final input in [email,password,fullName,code,title,channelId,displayName]) {
+    for(final input in [email,password,fullName,code,title,channelId,displayName,videoDescription]) {
       input.dispose();
     }
     api.dispose();
@@ -393,6 +395,16 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     const SizedBox(height:17),
     panel(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       field('Video Title',title),
+      field('Description',videoDescription,required:false,lines:3),
+      DropdownButtonFormField<String>(
+        initialValue:videoCategory,
+        decoration:const InputDecoration(labelText:'Video category'),
+        items:['Travel','Art','Lifestyle','Storytelling','Education',
+          'Entertainment','Technology','Stories']
+          .map((option)=>DropdownMenuItem(value:option,child:Text(option))).toList(),
+        onChanged:(option)=>setState(()=>videoCategory=option??'Stories'),
+      ),
+      const SizedBox(height:14),
       if(grantedChannelData.isEmpty)
         notice('No YouTube channel has been authorized for your account yet. An admin must grant access before a real upload can start.'),
       if(grantedChannelData.isNotEmpty)
@@ -428,10 +440,11 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
         final draft=await api.createDraft(title.text.trim());
         final id=draft['id']?.toString();
         if(id==null) throw const ApiFailure('Draft creation did not return an ID.');
+        await api.updateDraftMetadata(id,title.text.trim(),videoDescription.text,videoCategory);
         message('Draft saved. Starting private upload.');
         await api.upload(id,channelId.text.trim(),file.bytes!,file.name);
         if(!mounted) return;
-        title.clear();selectedFile=null;
+        title.clear();videoDescription.clear();selectedFile=null;
         message('Video uploaded privately and queued for admin review.');
         await navigate('My Videos');
       }),icon:Icons.cloud_upload_outlined),
