@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import 'backend_client.dart';
 import 'admin_panel.dart';
 import 'social_feed.dart';
+import 'upload_composer.dart';
 import 'social_design_widgets.dart';
 import 'product_ui.dart' show WeuTubeBrand, navy, coral, soft, slate, success;
 
@@ -18,9 +18,6 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
   final email = TextEditingController(), password = TextEditingController();
   final confirmPassword = TextEditingController();
   final fullName = TextEditingController(), code = TextEditingController();
-  final title = TextEditingController(), channelId = TextEditingController();
-  final videoDescription = TextEditingController();
-  String videoCategory = 'Travel';
   final displayName = TextEditingController();
   final form = GlobalKey<FormState>();
 
@@ -31,8 +28,6 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
   Map<String,dynamic> dashboardData = {}, walletData = {}, analyticsData = {}, profileData = {};
   List<Map<String,dynamic>> videoData = [], notificationData = [], withdrawalData = [];
   String error = '';
-  PlatformFile? selectedFile;
-  List<Map<String,dynamic>> grantedChannelData = [];
   static const nav = ['Dashboard','Upload Video','My Videos','Analytics',
     'Earnings','Wallet','Notifications','Profile','Settings'];
   static const navIcons = [Icons.dashboard_outlined,Icons.cloud_upload_outlined,
@@ -42,7 +37,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
 
   @override
   void dispose() {
-    for(final input in [email,password,confirmPassword,fullName,code,title,channelId,displayName,videoDescription]) {
+    for(final input in [email,password,confirmPassword,fullName,code,displayName]) {
       input.dispose();
     }
     api.dispose();
@@ -62,6 +57,8 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     finally {if(mounted) setState(() => busy=false);}
   }
   Future<void> navigate(String p) async {
+    // Resolve legacy links to Create, the only uploading entry point.
+    if(p == 'Upload Video') p = 'Create';
     if(!api.signedIn && (nav.contains(p) || p == 'Admin Operations')) {
       afterLogin=p;
       setState(() {page='Sign In';error='';});
@@ -77,12 +74,6 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     if(!api.signedIn || !nav.contains(p)) return;
     await perform(() async {
       switch(p) {
-        case 'Upload Video':
-          grantedChannelData=await api.grantedChannels();
-          if(grantedChannelData.isNotEmpty) {
-            channelId.text=grantedChannelData.first['channelId']?.toString() ?? '';
-          }
-          break;
         case 'Dashboard':
           dashboardData=await api.dashboard();
           break;
@@ -611,70 +602,6 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       ]);
     });
 
-  Widget upload() => Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    heading('Upload Video','Draft first, then privately upload to an authorized channel.'),
-    const SizedBox(height:17),
-    panel(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      field('Video Title',title),
-      field('Description',videoDescription,required:false,lines:3),
-      DropdownButtonFormField<String>(
-        initialValue:videoCategory,
-        decoration:const InputDecoration(labelText:'Video category'),
-        items:['Travel','Art','Lifestyle','Storytelling','Education',
-          'Entertainment','Technology','Stories']
-          .map((option)=>DropdownMenuItem(value:option,child:Text(option))).toList(),
-        onChanged:(option)=>setState(()=>videoCategory=option??'Stories'),
-      ),
-      const SizedBox(height:14),
-      if(grantedChannelData.isEmpty)
-        notice('No YouTube channel has been authorized for your account yet. An admin must grant access before a real upload can start.'),
-      if(grantedChannelData.isNotEmpty)
-        DropdownButtonFormField<String>(
-          initialValue:grantedChannelData.any((v)=>v['channelId']==channelId.text)
-            ?channelId.text:grantedChannelData.first['channelId']?.toString(),
-          decoration:const InputDecoration(labelText:'Authorized publishing channel'),
-          items:grantedChannelData.map((v)=>DropdownMenuItem<String>(
-            value:v['channelId']?.toString()??'',
-            child:Text(v['displayName']?.toString()??'YouTube channel'))).toList(),
-          onChanged:(value)=>channelId.text=value??'',
-        ),
-      const SizedBox(height:14),
-      button(selectedFile==null?'Choose Video (max 20 MB)':
-        'Selected: '+selectedFile!.name,()=>perform(() async {
-        final picked=await FilePicker.platform.pickFiles(type:FileType.video,
-          withData:true,allowMultiple:false);
-        if(picked!=null&&picked.files.isNotEmpty) {
-          final candidate=picked.files.first;
-          if(candidate.size>20*1024*1024) {
-            throw const ApiFailure('Testing build supports videos up to 20 MB.');
-          }
-          setState(()=>selectedFile=candidate);
-        }
-      }),secondary:true,icon:Icons.video_file_outlined),
-      const SizedBox(height:14),
-      button('Create Draft & Upload Privately',()=>perform(() async {
-        if(title.text.trim().isEmpty) throw const ApiFailure('Enter a title.');
-        if(grantedChannelData.isEmpty) throw const ApiFailure('Ask a WeuTube admin to grant upload access to the official channel.');
-        if(channelId.text.trim().isEmpty) throw const ApiFailure('Select an authorized YouTube channel.');
-        final file=selectedFile;
-        if(file==null||file.bytes==null) throw const ApiFailure('Select a video file first.');
-        final draft=await api.createDraft(title.text.trim());
-        final id=draft['id']?.toString();
-        if(id==null) throw const ApiFailure('Draft creation did not return an ID.');
-        await api.updateDraftMetadata(id,title.text.trim(),videoDescription.text,videoCategory);
-        message('Draft saved. Starting private upload.');
-        await api.upload(id,channelId.text.trim(),file.bytes!,file.name);
-        if(!mounted) return;
-        title.clear();videoDescription.clear();selectedFile=null;
-        message('Video uploaded privately and queued for admin review.');
-        await navigate('My Videos');
-      }),icon:Icons.cloud_upload_outlined),
-      const SizedBox(height:15),
-      const Text('Upload only content you own or are authorized to distribute. A channel admin must grant you upload permission. Public publishing requires separate approval.',
-        style:TextStyle(color:slate,fontSize:12))
-    ]))
-  ]);
-
   Widget analytics(double width) => Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     heading('Analytics','Verified YouTube Data API metrics, not estimated earnings.'),
     const SizedBox(height:16),
@@ -762,7 +689,6 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     }
     switch(page) {
       case 'Dashboard':return dashboard(width);
-      case 'Upload Video':return upload();
       case 'My Videos':return videos();
       case 'Video Details':return videoDetail();
       case 'Analytics':return analytics(width);
@@ -805,9 +731,9 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
 
   void createFromSocial() {
     if(api.signedIn) {
-      navigate('Upload Video');
+      navigate('Create');
     } else {
-      afterLogin='Upload Video';
+      afterLogin='Create';
       navigate('Sign In');
     }
   }
@@ -867,19 +793,24 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
         Expanded(child:Row(children:[
           if(api.signedIn&&wide&&!isSocial)sideNav(),
           Expanded(child:isSocial
-            ?Center(child:ConstrainedBox(
-                constraints:const BoxConstraints(maxWidth:620),
-                child:SocialHub(
-                  api:api,
-                  section:page,
-                  onNavigate:navigate,
-                  onSignIn:(){
-                    afterLogin='You';
-                    navigate('Sign In');
-                  },
-                  onCreate:createFromSocial,
-                  onStudio:()=>navigate('Dashboard'))))
-            :SingleChildScrollView(
+             ?Center(child:ConstrainedBox(
+                 constraints:const BoxConstraints(maxWidth:620),
+                 child:page=='Create'
+                   ?WeuTubeUploadComposer(
+                     api:api,
+                     onSignIn:createFromSocial,
+                     onViewVideos:()=>navigate('My Videos'))
+                   :SocialHub(
+                     api:api,
+                     section:page,
+                     onNavigate:navigate,
+                     onSignIn:(){
+                       afterLogin='You';
+                       navigate('Sign In');
+                     },
+                     onCreate:createFromSocial,
+                     onStudio:()=>navigate('Dashboard'))))
+             :SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: isAuth
                 ? EdgeInsets.fromLTRB(width<650?24:28, width<650?22:36,
@@ -894,7 +825,8 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                 ])))))
         ]))
       ])),
-      bottomNavigationBar:!isAuth
+      bottomNavigationBar:!isAuth &&
+          MediaQuery.viewInsetsOf(context).bottom==0
         ?WeuSocialBottomBar(selected:activeTab,onSelect:navigate)
         :null
     );
