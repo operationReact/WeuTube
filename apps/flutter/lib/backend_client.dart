@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'upload_chunk_reader.dart';
 import 'package:file_picker/file_picker.dart';
 import 'youtube_upload_rules.dart';
 import 'package:http/http.dart' as http;
@@ -231,6 +232,117 @@ class WeuTubeApi {
     if(response.statusCode!=200 && response.statusCode!=201)
       throw ApiFailure('Upload returned HTTP ${response.statusCode}.',response.statusCode);
     return asMap(jsonDecode(response.body));
+  }
+
+  /// YouTube owns uploaded video bytes; this server only relays bounded chunks.
+  /// No WeuTube-specific total file size cap is imposed.
+  Future<Map<String,dynamic>> beginYouTubeUpload(
+    String draftId,String channelId,PlatformFile file) async =>
+    asMap(await call('POST','/api/creator/uploads',data:{
+      'draftId':draftId,
+      'channelId':channelId,
+      'fileName':file.name,
+      'totalBytes':file.size,
+    }));
+
+  Future<Map<String,dynamic>> youtubeUploadStatus(String sessionId) async =>
+    asMap(await call('GET','/api/creator/uploads/'+Uri.encodeComponent(sessionId)));
+
+  Future<void> cancelYouTubeUpload(String sessionId) async =>
+    call('DELETE','/api/creator/uploads/'+Uri.encodeComponent(sessionId));
+
+  Future<Map<String,dynamic>> sendYouTubeChunk(
+    String sessionId,int first,int total,Uint8List bytes,
+    {bool retryAuthentication=true}) async {
+    if(!signedIn) throw const ApiFailure('Sign in first.',401);
+    if(bytes.isEmpty || bytes.length>8*1024*1024)
+      throw const ApiFailure('Invalid video transfer chunk');
+    final last = first+bytes.length-1;
+    final request=http.Request('PUT',uri(
+      '/api/creator/uploads/'+Uri.encodeComponent(sessionId)+'/chunk'))
+      ..headers.addAll({
+        'Authorization':'Bearer '+accessToken!,
+        'Accept':'application/json',
+        'Content-Type':'application/octet-stream',
+        'Content-Range':'bytes $first-$last/$total',
+      })
+      ..bodyBytes = bytes;
+    http.Response response;
+    try {
+      response = await http.Response.fromStream(
+        await _client.send(request).timeout(const Duration(minutes: 4)));
+    } catch (_) {
+      throw const ApiFailure(
+        'Connection interrupted. The app must check YouTube progress before retrying.');
+    }
+    if(response.statusCode==401 && retryAuthentication && refreshToken!=null) {
+      await refresh();
+      return sendYouTubeChunk(sessionId,first,total,bytes,
+        retryAuthentication:false);
+    }
+    if(response.statusCode==401) throw const ApiFailure('Session expired.',401);
+    if(response.statusCode==403) throw const ApiFailure('Channel permission denied.',403);
+    if(response.statusCode==404)
+      throw const ApiFailure('Upload session is unavailable.',404);
+    if(response.statusCode==409)
+      throw const ApiFailure('Upload progress changed. Check before resuming.',409);
+    if(response.statusCode<200 || response.statusCode>=300)
+      throw ApiFailure('YouTube transfer unavailable. HTTP ${response.statusCode}.',
+        response.statusCode);
+    return asMap(jsonDecode(response.body));
+  }
+
+  /// Progress is taken exclusively from Google's acknowledged byte offset,
+  /// not from how quickly the device wrote data into a socket.
+  Future<Map<String,dynamic>> transferToYouTube(
+    String sessionId,PlatformFile file,{
+    void Function(int acknowledgedBytes,int totalBytes)? onProgress,
+    bool Function()? shouldPause,
+  }) async {
+    if(file.size <= 0 || file.size > YouTubeUploadRules.youtubeMaxBytes)
+      throw const ApiFailure('This video is larger than YouTube accepts.');
+    final source=file.readStream ??
+      (file.bytes==null ? null : Stream<List<int>>.value(file.bytes!));
+    if(source==null)
+      throw const ApiFailure('Reselect the original video to resume uploading.');
+    final reader=UploadChunkReader(source);
+    try {
+      var state=await youtubeUploadStatus(sessionId);
+      final total=(state['totalBytes'] as num).toInt();
+      if(total!=file.size)
+        throw const ApiFailure('Reselect the same video file to resume.');
+      var acknowledged=(state['acknowledgedBytes'] as num).toInt();
+      onProgress?.call(acknowledged,total);
+      await reader.skip(acknowledged);
+      while(acknowledged<total) {
+        if(shouldPause?.call()==true) return state;
+        final length=(total-acknowledged < 8*1024*1024)
+          ? total-acknowledged : 8*1024*1024;
+        final chunk=await reader.readExact(length);
+        try {
+          state=await sendYouTubeChunk(sessionId,acknowledged,total,chunk);
+        } on ApiFailure {
+          // The server may have relayed some or all bytes before the timeout.
+          // Status GET reconciles with Google, never a blind duplicate PUT.
+          await youtubeUploadStatus(sessionId);
+          rethrow;
+        }
+        final accepted=(state['acknowledgedBytes'] as num).toInt();
+        if(accepted<acknowledged || accepted>total)
+          throw const ApiFailure('YouTube returned an inconsistent upload offset.');
+        if(accepted<acknowledged+length) {
+          throw const ApiFailure(
+            'YouTube accepted only part of the chunk. Reselect the original video '
+            'and resume from the confirmed offset.');
+        }
+        acknowledged=accepted;
+        onProgress?.call(acknowledged,total);
+        if(state['status']=='COMPLETED') break;
+      }
+      return state;
+    } finally {
+      await reader.close();
+    }
   }
 
   /// Public, clearly differentiated demo fixtures and real published submissions.

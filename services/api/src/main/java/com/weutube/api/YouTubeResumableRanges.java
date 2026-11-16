@@ -49,8 +49,8 @@ public final class YouTubeResumableRanges {
   long last=number(m.group(2));
   long total=number(m.group(3));
   validateFileLength(total);
-  if(first<0 || last<first || last>=total || first%CHUNK_GRANULARITY!=0)
-   throw new IllegalArgumentException("Misaligned or out-of-bounds video chunk");
+  if(first<0 || last<first || last>=total)
+   throw new IllegalArgumentException("Out-of-bounds video chunk");
   long length=last-first+1;
   if(length>RELAY_CHUNK_BYTES || length!=claimedContentLength ||
     (last!=total-1 && length%CHUNK_GRANULARITY!=0))
