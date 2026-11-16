@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'product_ui.dart' show navy, coral, soft, slate;
+import 'product_ui.dart' show navy, coral, slate;
 
 /// User-approved brand palette: no system lavender selection backgrounds.
 class WeuSocialBottomBar extends StatelessWidget {
@@ -39,7 +39,7 @@ class WeuSocialBottomBar extends StatelessWidget {
               Text(tabs[i],style:TextStyle(
                 color:selected==tabs[i]?coral:slate,fontSize:10,
                 fontWeight:selected==tabs[i]?FontWeight.w900:FontWeight.w600)),
-            ])))))
+            ]))))
     ])));
 }
 
