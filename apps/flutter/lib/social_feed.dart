@@ -459,7 +459,8 @@ class _SocialHubState extends State<SocialHub> {
             onDoubleTap:()=>doubleTapLike(item)),
           Positioned(top:15,left:15,right:15,child:Row(children:[
             if(isDemo(item))
-              pill('DEMO · sample content',Colors.white)
+              pill(MediaQuery.sizeOf(context).width < 375
+                ? 'DEMO' : 'DEMO · sample content',Colors.white)
             else
               pill('PUBLISHED',Colors.white),
             const Spacer(),
