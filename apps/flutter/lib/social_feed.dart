@@ -459,8 +459,8 @@ class _SocialHubState extends State<SocialHub> {
             onDoubleTap:()=>doubleTapLike(item)),
           Positioned(top:15,left:15,right:15,child:Row(children:[
             if(isDemo(item))
-              pill(MediaQuery.sizeOf(context).width < 375
-                ? 'DEMO' : 'DEMO · sample content',Colors.white)
+              Tooltip(message:'Demo sample content, not a real creator upload',
+                child:pill('DEMO',Colors.white))
             else
               pill('PUBLISHED',Colors.white),
             const Spacer(),
