@@ -318,7 +318,7 @@ class _SocialHubState extends State<SocialHub> {
             crossAxisAlignment:CrossAxisAlignment.start,children:[
               Row(children:[
                 CreatorPortrait(name:str(item['creator']),imageUrl:avatar(item),
-                  radius:19,highlighted:true),
+                  radius:19,highlighted:false),
                 const SizedBox(width:9),
                 Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
                   children:[
@@ -458,32 +458,20 @@ class _SocialHubState extends State<SocialHub> {
           style:const TextStyle(color:coral,fontWeight:FontWeight.w700)))
       ]));
 
+  /// A compact creator-discovery row, not a Stories feature.
   Widget stories() {
     final seen=<String>{};
     final unique=items.where((p)=>seen.add(followKey(p))).take(9).toList();
-    return SizedBox(height:85,child:ListView(scrollDirection:Axis.horizontal,
+    return SizedBox(height:76,child:ListView(scrollDirection:Axis.horizontal,
       padding:const EdgeInsets.symmetric(horizontal:12),
       children:[
-        Padding(padding:const EdgeInsets.only(right:16),
-          child:InkWell(onTap:widget.onCreate,
-            borderRadius:BorderRadius.circular(15),
-            child:Column(children:[
-              Container(width:48,height:48,
-                decoration:BoxDecoration(
-                  color:coral.withValues(alpha:.10),shape:BoxShape.circle,
-                  border:Border.all(color:coral.withValues(alpha:.25))),
-                child:const Icon(Icons.add_rounded,color:coral,size:24)),
-              const SizedBox(height:4),
-              const Text('Your video',style:TextStyle(
-                color:slate,fontSize:10,fontWeight:FontWeight.w700))
-            ]))),
         for(final item in unique)
           Padding(padding:const EdgeInsets.only(right:16),
-            child:InkWell(onTap:()=>play(item),
+            child:InkWell(onTap:()=>widget.onNavigate('Explore'),
               borderRadius:BorderRadius.circular(15),
               child:Column(children:[
                 CreatorPortrait(name:str(item['creator']),
-                  imageUrl:avatar(item),radius:23,highlighted:true),
+                  imageUrl:avatar(item),radius:21,highlighted:false),
                 const SizedBox(height:4),
                 SizedBox(width:58,child:Text(
                   str(item['creator']).split(' ').first,
@@ -499,14 +487,22 @@ class _SocialHubState extends State<SocialHub> {
     List<Map<String,dynamic>> feed=List.of(items);
     if(feedChoice=='Following') {
       feed=feed.where((post)=>following.contains(followKey(post))).toList();
-    } else if(feedChoice=='Fresh') {
-      feed=feed.reversed.toList();
+    } else if(feedChoice=='Latest') {
+      // Real published videos have timestamps; undated demos belong last.
+      feed.sort((a,b) {
+        final at = DateTime.tryParse(str(a['publishedAt']));
+        final bt = DateTime.tryParse(str(b['publishedAt']));
+        if(at==null && bt==null) return 0;
+        if(at==null) return 1;
+        if(bt==null) return -1;
+        return bt.compareTo(at);
+      });
     }
     return Column(children:[
       Container(color:Colors.white,
         padding:const EdgeInsets.fromLTRB(15,5,10,5),
         child:Row(children:[
-          for(final choice in ['For you','Following','Fresh'])
+          for(final choice in ['For you','Following','Latest'])
             Padding(padding:const EdgeInsets.only(right:13),
               child:InkWell(onTap:(){
                 setState((){feedChoice=choice;homeIndex=0;});
@@ -524,18 +520,12 @@ class _SocialHubState extends State<SocialHub> {
                   decoration:BoxDecoration(color:coral,
                     borderRadius:BorderRadius.circular(4)))
               ]))),
-          const Spacer(),
-          IconButton(onPressed:()=>widget.onNavigate('Explore'),
-            tooltip:'Search creators and topics',
-            icon:const Icon(Icons.search_rounded,color:navy,size:25)),
-          IconButton(onPressed:refresh,
-            tooltip:'Refresh feed',icon:const Icon(Icons.refresh_rounded,color:slate))
         ])),
       Container(color:Colors.white,
         alignment:Alignment.centerLeft,
         padding:const EdgeInsets.fromLTRB(14,8,12,5),
         child:Row(children:[
-          const Expanded(child:Text('Creators worth discovering',
+          const Expanded(child:Text('Discover creators',
             style:TextStyle(color:navy,fontSize:12,fontWeight:FontWeight.w900))),
           InkWell(onTap:()=>widget.onNavigate('Explore'),
             child:const Text('See all',style:TextStyle(
@@ -559,13 +549,15 @@ class _SocialHubState extends State<SocialHub> {
           TextButton(onPressed:()=>widget.onNavigate('Explore'),
             child:const Text('Discover creators'))
         ]))
-        :PageView.builder(
+        :RefreshIndicator(
+          onRefresh:refresh,
+          child:PageView.builder(
           key:ValueKey('feed-$feedChoice'),
           controller:homePager,
           scrollDirection:Axis.vertical,
           onPageChanged:(i)=>setState(()=>homeIndex=i),
           itemCount:feed.length,
-          itemBuilder:(context,index)=>immersivePost(feed[index],index))),
+          itemBuilder:(context,index)=>immersivePost(feed[index],index)))),
     ]);
   }
 
@@ -747,7 +739,7 @@ class _SocialHubState extends State<SocialHub> {
             child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Row(children:[
                 CreatorPortrait(name:str(post['creator']),
-                  imageUrl:avatar(post),radius:21,highlighted:true),
+                  imageUrl:avatar(post),radius:21,highlighted:false),
                 const SizedBox(width:9),
                 Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
                   children:[
