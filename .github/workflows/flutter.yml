@@ -23,7 +23,7 @@ jobs:
         working-directory: apps/flutter
       - run: flutter analyze --no-fatal-infos
         working-directory: apps/flutter
-      - run: flutter test test/app_test.dart
+      - run: flutter test
         working-directory: apps/flutter
       - run: flutter build web --release
         working-directory: apps/flutter
