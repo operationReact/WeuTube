@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'backend_client.dart';
+import 'admin_panel.dart';
 import 'product_ui.dart' show WeuTubeBrand, navy, coral, soft, slate, success;
 
 /// Responsive production API-connected creator experience for Android, iOS and web.
@@ -505,6 +506,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       case 'Earnings':return wallet(width);
       case 'Notifications':return notifications();
       case 'Profile':return profile();
+      case 'Admin Operations':return WeuTubeAdminPanel(api:api);
       case 'Settings':return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         heading('Settings','Account and session controls'),
         const SizedBox(height:16),notice('Tokens are retained only in memory for this testing build.'),
@@ -522,6 +524,8 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
           leading:Icon(navIcons[i],color:page==nav[i]?coral:navy),
           title:Text(nav[i],style:const TextStyle(fontSize:13)),
           onTap:()=>navigate(nav[i])),
+      if(api.showAdminMenu) ListTile(leading:const Icon(Icons.admin_panel_settings_outlined,color:coral),
+        title:const Text('Admin Operations'),onTap:()=>navigate('Admin Operations')),
       const Divider(),
       ListTile(leading:const Icon(Icons.logout,color:coral),
         title:const Text('Sign Out'),onTap:signOut)
@@ -556,6 +560,8 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
               IconButton(onPressed:()=>navigate('Sign In'),
                 icon:const Icon(Icons.login,color:navy))
             else ...[
+              if(api.showAdminMenu) IconButton(onPressed:()=>navigate('Admin Operations'),
+                icon:const Icon(Icons.admin_panel_settings_outlined,color:coral)),
               IconButton(onPressed:()=>navigate('Notifications'),
                 icon:const Icon(Icons.notifications_none,color:navy)),
               IconButton(onPressed:()=>navigate('Profile'),
