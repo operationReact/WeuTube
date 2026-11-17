@@ -2,9 +2,64 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'product_ui.dart' show WeuTubeBrand, navy, coral, slate;
 
-/// A compact cinematic scene around the exact approved WeuTube SVG.
-/// All perspective, lighting and motion live on separate decorative layers;
-/// the master logo file, its colors and its geometry are never transformed.
+/// One unbroken white sign-in canvas. These very subtle threads originate
+/// at the logo and continue beside the authentication controls; neither the
+/// logo nor the form is enclosed in an isolated decorative section.
+class ImmersiveSignInCanvas extends StatelessWidget {
+  const ImmersiveSignInCanvas({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    key: const ValueKey('immersive-signin-canvas'),
+    children: [
+      Positioned.fill(
+        child: IgnorePointer(
+          child: CustomPaint(painter: const _ContinuousCanvasPainter()),
+        ),
+      ),
+      child,
+    ],
+  );
+}
+
+class _ContinuousCanvasPainter extends CustomPainter {
+  const _ContinuousCanvasPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final left = Path()
+      ..moveTo(w * .16, 52)
+      ..cubicTo(-14, 115, 9, 174, 11, 248)
+      ..cubicTo(11, 334, -1, 440, 10, math.min(h - 24, 650));
+    final right = Path()
+      ..moveTo(w * .84, 50)
+      ..cubicTo(w + 15, 122, w - 6, 189, w - 11, 253)
+      ..cubicTo(w - 17, 350, w + 3, 431,
+        w - 11, math.min(h - 24, 650));
+    canvas.drawPath(left, Paint()
+      ..color = const Color(0x1B031B4B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.25);
+    canvas.drawPath(right, Paint()
+      ..color = const Color(0x28FE3F23)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.35);
+    final pin = Paint()..color = const Color(0x70FE3F23);
+    canvas.drawCircle(Offset(w - 11, math.min(h - 35, 355)), 2.8, pin);
+    canvas.drawCircle(Offset(11, math.min(h - 35, 270)), 2.4,
+      Paint()..color = const Color(0x50031B4B));
+  }
+
+  @override
+  bool shouldRepaint(_ContinuousCanvasPainter old) => false;
+}
+
+/// The master SVG is rendered directly over the page, never on a white
+/// placard, a navy hero box or any other decorative container. Perspective
+/// affects ONLY the small video/community layers around the logo.
 class ImmersiveBrandHero extends StatefulWidget {
   const ImmersiveBrandHero({super.key, this.compact = false});
   final bool compact;
@@ -15,9 +70,9 @@ class ImmersiveBrandHero extends StatefulWidget {
 
 class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _intro = AnimationController(
+  late final AnimationController _entrance = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1700),
+    duration: const Duration(milliseconds: 1450),
   );
   double _parallax = 0;
 
@@ -28,27 +83,27 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_reduceMotion) {
-      _intro.value = 1;
-    } else if (_intro.value == 0 && !_intro.isAnimating) {
-      _intro.forward();
+      _entrance.value = 1;
+    } else if (_entrance.value == 0 && !_entrance.isAnimating) {
+      _entrance.forward();
     }
   }
 
   @override
   void dispose() {
-    _intro.dispose();
+    _entrance.dispose();
     super.dispose();
   }
 
   void _replay() {
-    if (!_reduceMotion) _intro.forward(from: 0);
+    if (!_reduceMotion) _entrance.forward(from: 0);
   }
 
   @override
   Widget build(BuildContext context) {
-    final height = widget.compact ? 202.0 : 254.0;
+    final height = widget.compact ? 160.0 : 188.0;
     return Semantics(
-      label: 'WeuTube welcome animation. Double tap to replay.',
+      label: 'WeuTube logo. Tap to replay its welcome motion.',
       button: true,
       child: RepaintBoundary(
         child: GestureDetector(
@@ -57,109 +112,73 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
           onTap: _replay,
           onHorizontalDragUpdate: _reduceMotion ? null : (details) {
             setState(() {
-              _parallax = (_parallax + details.delta.dx / 240.0)
-                  .clamp(-0.18, 0.18);
+              _parallax = (_parallax + details.delta.dx / 240)
+                  .clamp(-.15, .15);
             });
           },
           onHorizontalDragEnd: _reduceMotion ? null : (_) {
             setState(() => _parallax = 0);
           },
           child: SizedBox(
-            height: height,
             width: double.infinity,
+            height: height,
             child: AnimatedBuilder(
-              animation: _intro,
+              animation: _entrance,
               builder: (context, _) {
-                final t = _reduceMotion
-                    ? 1.0
-                    : Curves.easeOutCubic.transform(_intro.value);
-                return LayoutBuilder(builder: (context, constraints) {
-                  final w = constraints.maxWidth;
-                  final logoWidth = math.min(w * .77, 354.0);
-                  final logoLeft = (w - logoWidth) / 2;
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(widget.compact ? 24 : 30),
-                    child: Stack(
-                      clipBehavior: Clip.hardEdge,
-                      children: [
-                        const Positioned.fill(
-                          child: ColoredBox(color: Color(0xFF10244A)),
+                final t = _reduceMotion ? 1.0
+                    : Curves.easeOutCubic.transform(_entrance.value);
+                return LayoutBuilder(builder: (context, layout) {
+                  final w = layout.maxWidth;
+                  final small = w < 330;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _LogoOrbitPainter(progress: t),
                         ),
-                        Positioned.fill(child: CustomPaint(
-                          painter: _SceneLines(progress: t),
-                        )),
-                        // Perspective content cards enter *behind* the logo.
-                        _storyCard(
-                          left: -19 + 22 * t + _parallax * 26,
-                          top: height * .15 - 19 * (1 - t),
-                          rotation: -.14 + (1 - t) * -.23,
-                          title: 'STORIES',
+                      )),
+                      Positioned(
+                        top: widget.compact ? 17 : 20,
+                        left: math.max(7.0, w * .075) + _parallax * 24,
+                        child: _floatingVideo(
+                          progress: t,
                           icon: Icons.video_library_outlined,
-                          accent: const Color(0xFFDCE5F7),
-                          progress: t,
+                          color: const Color(0xFF183666),
+                          angle: -.17,
+                          title: 'WATCH',
                         ),
-                        _storyCard(
-                          left: w - 110 - 5 * t - _parallax * 30,
-                          top: height * .12 + 19 * (1 - t),
-                          rotation: .18 + (1 - t) * .21,
-                          title: 'CREATORS',
+                      ),
+                      Positioned(
+                        top: widget.compact ? 11 : 16,
+                        right: math.max(7.0, w * .08) + _parallax * 24,
+                        child: _floatingVideo(
+                          progress: t,
                           icon: Icons.people_outline_rounded,
-                          accent: const Color(0xFFFF6854),
-                          progress: t,
+                          color: coral,
+                          angle: .16,
+                          title: 'CREATE',
                         ),
-                        Positioned(
-                          left: logoLeft,
-                          top: height * .365 + 13 * (1 - t),
-                          width: logoWidth,
-                          child: Opacity(
-                            opacity: ((t - .12) / .45).clamp(0.0, 1.0),
-                            child: Transform.translate(
-                              offset: Offset(_parallax * 4, 0),
-                              // Only the surrounding surface moves; SVG
-                              // remains upright, flat and undistorted.
-                              child: Container(
-                                height: widget.compact ? 70 : 86,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 15, vertical: 15),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFFEFD),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: const Color(0xFFF0F2F6)),
-                                  boxShadow: const [
-                                    BoxShadow(color: Color(0x3D000A29),
-                                      blurRadius: 22, offset: Offset(0, 13)),
-                                    BoxShadow(color: Color(0x2201092C),
-                                      blurRadius: 0, offset: Offset(0, 5)),
-                                  ],
-                                ),
+                      ),
+                      Positioned(
+                        top: widget.compact ? 79 : 91,
+                        left: 0, right: 0,
+                        child: Opacity(
+                          opacity: ((t - .13) / .44).clamp(0.0, 1.0),
+                          child: Transform.translate(
+                            offset: Offset(0, 8 * (1 - t)),
+                            child: Center(
+                              child: SizedBox(
+                                width: math.min(w * .89, 344.0),
+                                height: small ? 46 : 56,
                                 child: Center(child: WeuTubeBrand(
-                                  size: widget.compact ? 31 : 39)),
+                                  size: small ? 39 : 48)),
                               ),
                             ),
                           ),
                         ),
-                        Positioned(
-                          bottom: widget.compact ? 14 : 19,
-                          left: 10,
-                          right: 10,
-                          child: Opacity(
-                            opacity: ((t - .45) / .55).clamp(0.0, 1.0),
-                            child: const Text(
-                              'WATCH  /  CREATE  /  BELONG',
-                              maxLines: 1,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Color(0xFFDBE3F2),
-                                fontSize: 10,
-                                letterSpacing: 2.05,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   );
                 });
               },
@@ -170,75 +189,56 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
     );
   }
 
-  Widget _storyCard({
-    required double left,
-    required double top,
-    required double rotation,
-    required String title,
-    required IconData icon,
-    required Color accent,
+  Widget _floatingVideo({
     required double progress,
+    required IconData icon,
+    required Color color,
+    required double angle,
+    required String title,
   }) {
-    return Positioned(
-      left: left,
-      top: top,
-      child: Opacity(
-        opacity: ((progress - .04) / .42).clamp(0.0, 1.0),
-        child: Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, .001)
-            ..rotateY(rotation)
-            ..rotateZ(rotation * .34),
-          child: Container(
-            width: 111,
-            height: widget.compact ? 72 : 87,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF233C69),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF61759B)),
-              boxShadow: const [
-                BoxShadow(color: Color(0x66030E29),
-                  blurRadius: 13, offset: Offset(0, 8)),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Icon(icon, color: accent, size: 18),
-                  const SizedBox(width: 5),
-                  Expanded(child: Text(title, maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 9, letterSpacing: .7,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFFEDF1F9)))),
-                ]),
-                const Spacer(),
-                Row(children: [
-                  Container(height: 15, width: 17,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: .65),
-                      borderRadius: BorderRadius.circular(4))),
-                  const SizedBox(width: 5),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(height: 4, decoration: BoxDecoration(
-                        color: const Color(0xFFD3DFF0),
-                        borderRadius: BorderRadius.circular(4))),
-                      const SizedBox(height: 4),
-                      FractionallySizedBox(widthFactor: .63,
-                        child: Container(height: 4, decoration: BoxDecoration(
-                          color: const Color(0xFF7D92B9),
-                          borderRadius: BorderRadius.circular(4)))),
-                    ],
-                  )),
-                ]),
-              ],
-            ),
+    final show = ((progress - .02) / .58).clamp(0.0, 1.0);
+    final width = widget.compact ? 72.0 : 84.0;
+    return Opacity(
+      opacity: show,
+      child: Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..setEntry(3, 2, .0013)
+          ..rotateY(angle * .9)
+          ..rotateZ(angle * (1 + (1 - show) * .8)),
+        child: Container(
+          width: width,
+          height: widget.compact ? 62 : 70,
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFBFCFF),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: const Color(0xFFDCE4EF)),
+            boxShadow: const [
+              BoxShadow(color: Color(0x16031B4B),
+                blurRadius: 15, offset: Offset(0, 6)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 28,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(icon, size: 15,
+                  color: Colors.white),
+              ),
+              const SizedBox(height: 5),
+              Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: navy, fontSize: 9,
+                  letterSpacing: .6, fontWeight: FontWeight.w800)),
+            ],
           ),
         ),
       ),
@@ -246,46 +246,37 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
   }
 }
 
-class _SceneLines extends CustomPainter {
-  const _SceneLines({required this.progress});
+class _LogoOrbitPainter extends CustomPainter {
+  const _LogoOrbitPainter({required this.progress});
   final double progress;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * .52);
-    final ring = Rect.fromCenter(center: center,
-      width: math.min(size.width * .97, 460.0), height: size.height * .58);
+    final center = Offset(size.width / 2, size.height * .55);
+    final ring = Rect.fromCenter(
+      center: center,
+      width: math.min(size.width * .96, 490.0),
+      height: size.height * .73,
+    );
     final base = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
-    canvas.drawArc(ring, math.pi * .83, math.pi * 1.45, false,
-      base..color = const Color(0xFF5B739F));
-    canvas.drawArc(ring, -math.pi * .84,
-      math.pi * (.16 + .89 * progress), false,
-      base..color = coral);
-    canvas.drawArc(ring, math.pi * .19, math.pi * .42, false,
-      base..color = const Color(0xFFD5E0F5));
-    canvas.drawCircle(Offset(center.dx - ring.width * .47, center.dy + 4),
-      3.8, Paint()..color = const Color(0xFFDBE4F4));
-    canvas.drawCircle(Offset(center.dx + ring.width * .48, center.dy - 7),
-      3.8, Paint()..color = const Color(0xFFFF6A57));
-    for (var row = 0; row < 3; row++) {
-      for (var col = 0; col < 5; col++) {
-        canvas.drawCircle(
-          Offset(17 + col * 9.0, size.height - 40 - row * 9.0), .9,
-          Paint()..color = const Color(0xFF526B95));
-        canvas.drawCircle(
-          Offset(size.width - 17 - col * 9.0, 23 + row * 9.0), .9,
-          Paint()..color = const Color(0xFF526B95));
-      }
-    }
+      ..strokeWidth = 1.5;
+    canvas.drawArc(ring, math.pi * .74, math.pi * 1.5, false,
+      base..color = const Color(0x2D031B4B));
+    canvas.drawArc(ring, -math.pi * .8,
+      math.pi * (.12 + progress * .8), false,
+      base..color = const Color(0x8CFE3F23));
+    canvas.drawCircle(Offset(center.dx - ring.width * .48, center.dy + 4),
+      3.0, Paint()..color = const Color(0x66031B4B));
+    canvas.drawCircle(Offset(center.dx + ring.width * .47, center.dy - 6),
+      3.0, Paint()..color = const Color(0xA0FE3F23));
   }
 
   @override
-  bool shouldRepaint(_SceneLines old) => old.progress != progress;
+  bool shouldRepaint(_LogoOrbitPainter old) =>
+      old.progress != progress;
 }
 
-/// No duplicated brand wordmark or large static splash text below the scene.
 class PremiumSignInHeader extends StatelessWidget {
   const PremiumSignInHeader({super.key, required this.compact});
   final bool compact;
@@ -294,16 +285,16 @@ class PremiumSignInHeader extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     children: [
       ImmersiveBrandHero(compact: compact),
-      SizedBox(height: compact ? 15 : 21),
+      const SizedBox(height: 3),
       const Text('Welcome Back',
         textAlign: TextAlign.center,
-        style: TextStyle(color: navy, fontSize: 26,
-          height: 1.08, fontWeight: FontWeight.w900)),
+        style: TextStyle(color: navy, fontSize: 25,
+          height: 1.1, fontWeight: FontWeight.w900)),
       const SizedBox(height: 5),
       const Text('Your stories. Our community.',
         textAlign: TextAlign.center,
         style: TextStyle(color: slate, fontSize: 14,
-          height: 1.35, fontWeight: FontWeight.w600)),
+          height: 1.3, fontWeight: FontWeight.w600)),
     ],
   );
 }
