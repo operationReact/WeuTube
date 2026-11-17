@@ -1,0 +1,111 @@
+name: WeuTube - bootstrap the first production administrator
+
+# Manual and owner-only. Do not provision administrators from a push,
+# unauthenticated API request, or self-service registration.
+on:
+  workflow_dispatch:
+    inputs:
+      account_email:
+        description: 'Email of an EXISTING, confirmed WeuTube account (password or Google sign-in)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  grant-admin:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: weutube-production-admin-bootstrap
+      cancel-in-progress: false
+    steps:
+      - name: Only the repository owner may authorize administrator creation
+        env:
+          INVOKING_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          if [ "$INVOKING_ACTOR" != "operationReact" ]; then
+            echo "::error::Only the repository owner can run this production administrator bootstrap."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+          role-session-name: weutube-admin-bootstrap
+      - name: Check expected production AWS account
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "098859530205"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.0'
+      - name: Read existing Cognito user pool ID from locked production state
+        working-directory: infra/terraform
+        run: |
+          set -euo pipefail
+          terraform init -input=false \
+            -backend-config="bucket=weutube-prod-tfstate-098859530205" \
+            -backend-config="key=weutube/prod/terraform.tfstate" \
+            -backend-config="region=ap-south-1" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          pool="$(terraform output -raw cognito_user_pool_id)"
+          [[ "$pool" =~ ^ap-south-1_[A-Za-z0-9]+$ ]]
+          echo "WEUTUBE_POOL_ID=$pool" >> "$GITHUB_ENV"
+      - name: Promote exactly one existing, enabled and confirmed account
+        env:
+          RAW_EMAIL: ${{ inputs.account_email }}
+        run: |
+          set -euo pipefail
+          # Workflow inputs are environment data, never interpolated into shell code.
+          email="${RAW_EMAIL,,}"
+          if [[ ! "$email" =~ ^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$ ]]; then
+            echo "::error::Enter a valid existing WeuTube account email."
+            exit 1
+          fi
+          aws cognito-idp get-group \
+            --region ap-south-1 \
+            --user-pool-id "$WEUTUBE_POOL_ID" \
+            --group-name weutube-admin \
+            --query Group.GroupName --output text | grep -qx 'weutube-admin'
+          users="$(aws cognito-idp list-users \
+            --region ap-south-1 \
+            --user-pool-id "$WEUTUBE_POOL_ID" \
+            --filter "email = \"$email\"" --output json)"
+          count="$(jq '.Users | length' <<< "$users")"
+          if [ "$count" != "1" ]; then
+            echo "::error::Expected exactly one existing account with that email; found $count. Sign up/sign in first, or resolve duplicate identities before retrying."
+            exit 1
+          fi
+          username="$(jq -r '.Users[0].Username' <<< "$users")"
+          status="$(jq -r '.Users[0].UserStatus' <<< "$users")"
+          enabled="$(jq -r '.Users[0].Enabled' <<< "$users")"
+          if [ -z "$username" ] || [ "$username" = "null" ] || [ "$enabled" != "true" ] || \
+             { [ "$status" != "CONFIRMED" ] && [ "$status" != "EXTERNAL_PROVIDER" ]; }; then
+            echo "::error::The selected account is not enabled and confirmed. Complete account registration first."
+            exit 1
+          fi
+          # Group membership is granted ONLY to the existing account selected
+          # by this explicit owner-authorized, manual GitHub Actions run.
+          aws cognito-idp admin-add-user-to-group \
+            --region ap-south-1 \
+            --user-pool-id "$WEUTUBE_POOL_ID" \
+            --username "$username" \
+            --group-name weutube-admin
+          aws cognito-idp admin-list-groups-for-user \
+            --region ap-south-1 \
+            --user-pool-id "$WEUTUBE_POOL_ID" \
+            --username "$username" --output json \
+            | jq -e '[.Groups[]?.GroupName] | index("weutube-admin") != null' >/dev/null
+          echo 'Verified: existing WeuTube account is now in the weutube-admin Cognito group.'
+          {
+            echo "## WeuTube administrator bootstrap"
+            echo "- Production Cognito group membership: **verified**"
+            echo "- Sign out of WeuTube and sign in again to receive the updated access token."
+            echo "- Open **Admin Operations > Channels > Connect with Google**."
+            echo "- Google channel-owner consent is still required to authorize the shared YouTube channel."
+          } >> "$GITHUB_STEP_SUMMARY"
