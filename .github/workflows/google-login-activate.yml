@@ -143,11 +143,36 @@ jobs:
               "\(.address): \(.change.actions | join(","))"' google-signin-plan.json
             exit 1
           }
-          # Never print Terraform state, IdP secret, JSON plan or credentials.
-          terraform apply -input=false -auto-approve google-signin.tfplan >/dev/null
+          echo "Scoped Cognito plan guard passed."
+          # Terraform normally prints the full resource change log; capturing it
+          # prevents accidental disclosure of OAuth provider_details secrets.
+          # Only approved resource names and AWS error types may be logged.
+          if terraform apply -input=false -auto-approve google-signin.tfplan \
+                >google-signin-apply.log 2>&1; then
+            echo "Scoped Cognito Terraform apply completed."
+          else
+            python3 - <<'PY'
+import re
+from pathlib import Path
+output = Path("google-signin-apply.log").read_text(errors="replace")
+types = sorted(set(re.findall(
+    r"\\b(?:[A-Za-z]{3,60}Exception|[A-Za-z]{3,60}Error)\\b", output)))
+resources = sorted(set(re.findall(
+    r"aws_cognito_(?:identity_provider|user_pool_client|user_pool_domain)\\.[a-zA-Z0-9_]+\\[[0-9]+\\]", output)))
+print("::error::Google Cognito Terraform apply failed.")
+print("AWS error types (no values): " + (", ".join(types) or "not reported"))
+print("Affected allowlisted Cognito resources: " + (", ".join(resources) or "not reported"))
+PY
+            exit 1
+          fi
           tf_outputs="$(terraform output -json)"
-          echo "$tf_outputs" | jq -e '.google_login_enabled.value == true and
-            (.cognito_login_domain.value | startswith("https://"))' >/dev/null
+          if ! printf '%s' "$tf_outputs" | jq -e '.google_login_enabled.value == true and
+            (.cognito_login_domain.value | startswith("https://"))' >/dev/null; then
+            # Do not print credentials or complete Terraform outputs.
+            echo "::error::Cognito resources applied but Google readiness outputs are not enabled."
+            printf '%s' "$tf_outputs" | jq -r '"Google enabled output: \\(.google_login_enabled.value // false); login domain configured: \\((.cognito_login_domain.value // "") | startswith("https://"))"'
+            exit 1
+          fi
           echo "Cognito Google federation and login domain applied from a restricted plan."
       - name: Dispatch existing production release with refreshed auth settings
         if: steps.credentials.outputs.available == 'true'
