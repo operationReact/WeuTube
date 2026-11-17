@@ -47,11 +47,17 @@ jobs:
           echo "ARTIFACT_BUCKET=$(terraform output -raw api_artifacts_bucket)" >> "$GITHUB_ENV"
           echo "COGNITO_ISSUER=$(terraform output -raw cognito_issuer_uri)" >> "$GITHUB_ENV"
           echo "COGNITO_CLIENT_ID=$(terraform output -raw cognito_client_id)" >> "$GITHUB_ENV"
-          # These outputs are opt-in and may not yet exist in old state.
-          google_enabled="$(terraform output -raw google_login_enabled 2>/dev/null || echo false)"
-          cognito_domain="$(terraform output -raw cognito_login_domain 2>/dev/null || echo '')"
-          echo "GOOGLE_ENABLED=$google_enabled" >> "$GITHUB_ENV"
-          echo "COGNITO_LOGIN_DOMAIN=$cognito_domain" >> "$GITHUB_ENV"
+          # Read optional outputs from machine-readable JSON: missing state
+          # outputs may print warnings and break GITHUB_ENV if parsed as raw text.
+          all_outputs="$(terraform output -json)"
+          google_enabled="$(printf '%s' "$all_outputs" | jq -r '.google_login_enabled.value // false')"
+          cognito_domain="$(printf '%s' "$all_outputs" | jq -r '.cognito_login_domain.value // ""')"
+          test "$google_enabled" = true || test "$google_enabled" = false
+          if [ -n "$cognito_domain" ]; then
+            [[ "$cognito_domain" =~ ^https://[a-z0-9.-]+\\.amazoncognito\\.com$ ]]
+          fi
+          printf 'GOOGLE_ENABLED=%s\n' "$google_enabled" >> "$GITHUB_ENV"
+          printf 'COGNITO_LOGIN_DOMAIN=%s\n' "$cognito_domain" >> "$GITHUB_ENV"
           echo "DEPLOY_ROLE=$(terraform output -raw github_api_deploy_role_arn)" >> "$GITHUB_ENV"
       - name: Verify required encrypted SSM parameters without exposing values
         run: |
