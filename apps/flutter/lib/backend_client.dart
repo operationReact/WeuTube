@@ -1,4 +1,8 @@
 import 'dart:convert';
+import 'dart:math' as math;
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'dart:typed_data';
 import 'upload_chunk_reader.dart';
 import 'package:file_picker/file_picker.dart';
@@ -101,6 +105,96 @@ class WeuTubeApi {
     call('POST','/api/public/auth/confirm',auth:false,data:{'email':email,'code':code});
   Future<void> resend(String email) async =>
     call('POST','/api/public/auth/resend-code',auth:false,data:{'email':email});
+  /// Cognito Hosted UI authorization-code + PKCE, federated through Google.
+  /// Uses the *same* Cognito user pool and JWTs as password login. The Google
+  /// identity provider is separate from the YouTube channel OAuth connection.
+  /// Never embed an OAuth client secret in the mobile app.
+  Future<Map<String,dynamic>> loginWithGoogle({
+    Future<String> Function(String authorizationUrl, String callbackScheme)? authorize,
+  }) async {
+    final config = asMap(await call(
+      'GET', '/api/public/auth/google-config', auth: false));
+    if(config['enabled'] != true) {
+      throw const ApiFailure('Google sign-in requires the WeuTube Google '
+        'identity provider to be configured. Use email sign-in for now.', 503);
+    }
+    final domain = config['hostedUiDomain']?.toString() ?? '';
+    final clientId = config['clientId']?.toString() ?? '';
+    final redirect = kIsWeb
+      ? config['webRedirectUri']?.toString() ?? ''
+      : config['nativeRedirectUri']?.toString() ?? '';
+    final base = Uri.tryParse(domain);
+    final redirectUri = Uri.tryParse(redirect);
+    if (base == null || base.scheme != 'https' || base.host.isEmpty ||
+        base.userInfo.isNotEmpty || clientId.isEmpty || redirectUri == null ||
+        redirectUri.scheme.isEmpty) {
+      throw const ApiFailure('Google sign-in configuration is incomplete.', 503);
+    }
+    String randomUrlSafe(int length) {
+      final rng = math.Random.secure();
+      return base64Url.encode(
+        List<int>.generate(length, (_) => rng.nextInt(256)))
+        .replaceAll('=', '');
+    }
+    final state = randomUrlSafe(32);
+    final verifier = randomUrlSafe(48);
+    final challenge = base64Url.encode(
+      sha256.convert(utf8.encode(verifier)).bytes).replaceAll('=', '');
+    final url = base.resolve('oauth2/authorize').replace(queryParameters: {
+      'response_type': 'code',
+      'client_id': clientId,
+      'redirect_uri': redirect,
+      'scope': 'openid email profile',
+      'identity_provider': 'Google',
+      'code_challenge_method': 'S256',
+      'code_challenge': challenge,
+      'state': state,
+    });
+    final callback = await (authorize != null
+      ? authorize(url.toString(), redirectUri.scheme)
+      : FlutterWebAuth2.authenticate(url: url.toString(),
+          callbackUrlScheme: redirectUri.scheme));
+    final params = Uri.parse(callback).queryParameters;
+    if (params['state'] != state) {
+      throw const ApiFailure('Google sign-in could not be verified. Try again.');
+    }
+    if (params['error'] != null) {
+      throw const ApiFailure('Google sign-in was cancelled or declined.');
+    }
+    final code = params['code'];
+    if (code == null || code.isEmpty) {
+      throw const ApiFailure('Google sign-in did not return an authorization code.');
+    }
+    final response = await _client.post(base.resolve('oauth2/token'),
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: {
+        'grant_type': 'authorization_code',
+        'client_id': clientId,
+        'code': code,
+        'redirect_uri': redirect,
+        'code_verifier': verifier,
+      }).timeout(const Duration(seconds: 25));
+    if (response.statusCode != 200) {
+      throw const ApiFailure(
+        'Google authorization was not completed by Cognito. Please retry.');
+    }
+    final tokenBody = jsonDecode(response.body);
+    if (tokenBody is! Map<String,dynamic> ||
+        tokenBody['id_token'] is! String ||
+        tokenBody['access_token'] is! String) {
+      throw const ApiFailure('Invalid identity-provider token response.');
+    }
+    final result = <String,dynamic>{
+      'status': 'SIGNED_IN',
+      'accessToken': tokenBody['access_token'],
+      'idToken': tokenBody['id_token'],
+      if (tokenBody['refresh_token'] is String)
+        'refreshToken': tokenBody['refresh_token'],
+    };
+    receive(result);
+    return result;
+  }
+
   Future<Map<String,dynamic>> login(String email,String password) async {
     final result=asMap(await call('POST','/api/public/auth/sign-in',auth:false,
       data:{'email':email,'password':password}));
