@@ -5,7 +5,6 @@ import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'backend_client.dart';
-import 'social_demo_data.dart';
 import 'social_design_widgets.dart';
 import 'youtube_embed.dart';
 import 'product_ui.dart' show navy, coral, soft, slate;
@@ -34,7 +33,6 @@ class SocialHub extends StatefulWidget {
 }
 
 class _SocialHubState extends State<SocialHub> {
-  static const demo = socialDemoPosts;
   final Set<String> liked = {}, saved = {}, following = {};
   final Map<String, List<String>> draftComments = {};
   final search = TextEditingController();
