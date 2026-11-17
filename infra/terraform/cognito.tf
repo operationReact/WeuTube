@@ -29,11 +29,13 @@ resource "aws_cognito_user_pool" "weutube" {
   }
 }
 # Google user sign-in is a distinct OAuth integration from YouTube channel grants.
-# Keep it OFF until the Google Console OAuth web client has been provisioned.
+# Google login credentials are provisioned in the production AWS account.
+# Keep enabled for ALL subsequent production Terraform plans; silently reverting
+# this setting would disconnect Google users from their login provider.
 # Place its credentials in SSM SecureString (never in Terraform variables or Git).
 variable "enable_google_login" {
   type = bool
-  default = false
+  default = true
 }
 data "aws_ssm_parameter" "google_login_client_id" {
   count = var.enable_api && var.enable_google_login ? 1 : 0
