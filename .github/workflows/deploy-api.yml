@@ -79,10 +79,10 @@ jobs:
           flutter pub get
           flutter analyze --no-fatal-infos
           flutter test
-          flutter build web --release
+          flutter build web --release --dart-define=WEUTUBE_BUILD_SHA="$GITHUB_SHA"
           # Test-only Android package, signed by the ephemeral debug key.
           # Never confuse this with a Play Store production release.
-          flutter build apk --debug
+          flutter build apk --debug --dart-define=WEUTUBE_BUILD_SHA="$GITHUB_SHA"
           mkdir -p build/web/downloads
           cp build/app/outputs/flutter-apk/app-debug.apk build/web/downloads/weutube-test.apk
           test -s build/web/downloads/weutube-test.apk
@@ -149,7 +149,17 @@ jobs:
           curl --fail --silent --show-error --max-time 15 -o /dev/null https://weutube.com/
           # Stable APK path must be served from the SAME tested web revision.
           curl --fail --silent --show-error --head --max-time 15             https://weutube.com/downloads/weutube-test.apk >/dev/null
-          curl --fail --silent --show-error --max-time 15 https://api.weutube.com/api/public/status | jq -e '.service == "weutube-api"' >/dev/null
+          curl --fail --silent --show-error --max-time 15 https://api.weutube.com/api/public/status |
+            jq -e --arg sha "$GITHUB_SHA" '.service == "weutube-api" and .revision == $sha' >/dev/null
+          # Report actual channel configuration without exposing channel IDs,
+          # OAuth tokens, Cognito subjects or claiming real upload success.
+          readiness="$(curl --fail --silent --show-error --max-time 15 https://api.weutube.com/api/public/upload-readiness)"
+          echo "$readiness" | jq -e --arg sha "$GITHUB_SHA" '.revision == $sha' >/dev/null
+          channel_state="$(echo "$readiness" | jq -r '.state')"
+          echo "Upload channel diagnostic: $channel_state"
+          if [ "$channel_state" != 'CHANNEL_RECORD_PRESENT' ]; then
+            echo "::warning::Upload onboarding not ready: $channel_state (Google channel authorization may be required)"
+          fi
           # Do not call this successful when private creator routes are
           # mysteriously returning 403 to unauthenticated/invalid JWTs.
           # The expected OAuth resource-server response is 401.
