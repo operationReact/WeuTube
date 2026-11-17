@@ -29,6 +29,25 @@ void main() {
     expect(api.signedIn,isFalse);
     api.dispose();
   });
+  test('Google callback follows the exact official web origin', () {
+    const defaultRedirect = 'https://weutube.com/auth.html';
+    expect(googleWebCallbackForOrigin(defaultRedirect,
+      Uri.parse('https://weutube.com/create'), isWeb:true),
+      'https://weutube.com/auth.html');
+    expect(googleWebCallbackForOrigin(defaultRedirect,
+      Uri.parse('https://www.weutube.com/sign-in'), isWeb:true),
+      'https://www.weutube.com/auth.html');
+    expect(googleWebCallbackForOrigin(defaultRedirect,
+      Uri.parse('https://attacker.weutube.com/'), isWeb:true),
+      defaultRedirect);
+    expect(googleWebCallbackForOrigin(defaultRedirect,
+      Uri.parse('http://weutube.com/'), isWeb:true),
+      defaultRedirect);
+    expect(googleWebCallbackForOrigin(defaultRedirect,
+      Uri.parse('https://www.weutube.com/'), isWeb:false),
+      defaultRedirect);
+  });
+
   test('Google auth is safely unavailable until Cognito identity provider is enabled', () async {
     final api=WeuTubeApi(client:MockClient((req) async =>
       http.Response(jsonEncode({'enabled':false}),200)));
