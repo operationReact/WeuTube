@@ -120,8 +120,16 @@ class WeuTubeApi {
     }
     final domain = config['hostedUiDomain']?.toString() ?? '';
     final clientId = config['clientId']?.toString() ?? '';
+    // The OAuth popup must return to exactly the same web origin that
+    // opened it. A www -> apex mismatch makes postMessage fail silently.
+    final configuredWebRedirect = config['webRedirectUri']?.toString() ?? '';
+    final currentWebOrigin = Uri.base.origin;
+    final webRedirect = kIsWeb && (
+      currentWebOrigin == 'https://weutube.com' ||
+      currentWebOrigin == 'https://www.weutube.com')
+      ? '$currentWebOrigin/auth.html' : configuredWebRedirect;
     final redirect = kIsWeb
-      ? config['webRedirectUri']?.toString() ?? ''
+      ? webRedirect
       : config['nativeRedirectUri']?.toString() ?? '';
     final base = Uri.tryParse(domain);
     final redirectUri = Uri.tryParse(redirect);
