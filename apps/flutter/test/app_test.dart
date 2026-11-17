@@ -176,6 +176,10 @@ void main() {
     await tester.tap(find.text('Sign in to upload'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'Initial sign-in at 320dp');
+    final divider = find.text('or use email');
+    expect(divider, findsOneWidget);
+    expect(tester.getSize(divider).height, lessThan(22),
+      reason: 'Email sign-in separator must not wrap into two lines');
     await tester.ensureVisible(find.text('Sign In').last);
     await tester.pumpAndSettle();
     expect(find.text('Sign In'), findsWidgets);

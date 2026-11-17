@@ -75,7 +75,7 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
                     : Curves.easeOutCubic.transform(_intro.value);
                 return LayoutBuilder(builder: (context, constraints) {
                   final w = constraints.maxWidth;
-                  final logoWidth = math.min(w * .77, 354.0);
+                  final logoWidth = math.min(w * .73, 334.0);
                   final logoLeft = (w - logoWidth) / 2;
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(widget.compact ? 24 : 30),
@@ -90,18 +90,18 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
                         )),
                         // Perspective content cards enter *behind* the logo.
                         _storyCard(
-                          left: -19 + 22 * t + _parallax * 26,
-                          top: height * .15 - 19 * (1 - t),
-                          rotation: -.14 + (1 - t) * -.23,
+                          left: -31 + 33 * t + _parallax * 62,
+                          top: height * .135 - 27 * (1 - t),
+                          rotation: -.19 + (1 - t) * -.31 - _parallax * .25,
                           title: 'STORIES',
                           icon: Icons.video_library_outlined,
                           accent: const Color(0xFFDCE5F7),
                           progress: t,
                         ),
                         _storyCard(
-                          left: w - 110 - 5 * t - _parallax * 30,
-                          top: height * .12 + 19 * (1 - t),
-                          rotation: .18 + (1 - t) * .21,
+                          left: w - 110 - 6 * t - _parallax * 61,
+                          top: height * .11 + 28 * (1 - t),
+                          rotation: .2 + (1 - t) * .27 - _parallax * .28,
                           title: 'CREATORS',
                           icon: Icons.people_outline_rounded,
                           accent: const Color(0xFFFF6854),
@@ -109,7 +109,7 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
                         ),
                         Positioned(
                           left: logoLeft,
-                          top: height * .365 + 13 * (1 - t),
+                          top: height * .385 + 15 * (1 - t),
                           width: logoWidth,
                           child: Opacity(
                             opacity: ((t - .12) / .45).clamp(0.0, 1.0),
@@ -117,24 +117,46 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
                               offset: Offset(_parallax * 4, 0),
                               // Only the surrounding surface moves; SVG
                               // remains upright, flat and undistorted.
-                              child: Container(
-                                height: widget.compact ? 70 : 86,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 15, vertical: 15),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFFEFD),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: const Color(0xFFF0F2F6)),
-                                  boxShadow: const [
-                                    BoxShadow(color: Color(0x3D000A29),
-                                      blurRadius: 22, offset: Offset(0, 13)),
-                                    BoxShadow(color: Color(0x2201092C),
-                                      blurRadius: 0, offset: Offset(0, 5)),
-                                  ],
-                                ),
-                                child: Center(child: WeuTubeBrand(
-                                  size: widget.compact ? 31 : 39)),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  // A separate rear plane supplies depth. The
+                                  // master SVG remains flat and unmodified.
+                                  Positioned(
+                                    left: 5, right: 5, top: 8,
+                                    child: Transform(
+                                      alignment: Alignment.center,
+                                      transform: Matrix4.identity()
+                                        ..setEntry(3, 2, .0009)
+                                        ..rotateX(-.085),
+                                      child: Container(
+                                        height: widget.compact ? 63 : 78,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF65789C),
+                                          borderRadius:
+                                            BorderRadius.circular(16)),
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    height: widget.compact ? 64 : 79,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 15, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFFFFF),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: const Color(0xFFF0F2F6)),
+                                      boxShadow: const [
+                                        BoxShadow(color: Color(0x49000A29),
+                                          blurRadius: 24,
+                                          offset: Offset(0, 14)),
+                                      ],
+                                    ),
+                                    child: Center(child: WeuTubeBrand(
+                                      size: widget.compact ? 29 : 36)),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -189,15 +211,15 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
           transform: Matrix4.identity()
             ..setEntry(3, 2, .001)
             ..rotateY(rotation)
-            ..rotateZ(rotation * .34),
+            ..rotateZ(rotation * .45),
           child: Container(
-            width: 111,
-            height: widget.compact ? 72 : 87,
+            width: 108,
+            height: widget.compact ? 77 : 91,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF233C69),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF61759B)),
+              color: const Color(0xFF213B68),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF8192B1)),
               boxShadow: const [
                 BoxShadow(color: Color(0x66030E29),
                   blurRadius: 13, offset: Offset(0, 8)),
