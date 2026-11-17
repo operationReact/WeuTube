@@ -91,7 +91,7 @@ public class SocialFeedController {
      int seconds=rs.getInt(8);
      String duration=String.format("%d:%02d",seconds/60,seconds%60);
      return new FeedItem("yt-"+yt,rs.getString(2),name,
-       null,handle,"YouTube",rs.getString(5),rs.getString(6),
+       rs.getString(4),handle,"YouTube",rs.getString(5),rs.getString(6),
        null,"https://www.youtube.com/watch?v="+yt,
        views instanceof Number n?n.longValue():null,
        likes instanceof Number n?n.longValue():0L,
