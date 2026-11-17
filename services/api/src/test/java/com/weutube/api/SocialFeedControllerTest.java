@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.RowMapper;
 class SocialFeedControllerTest {
  private final JdbcTemplate jdbc=mock(JdbcTemplate.class);
  private final YouTubeChannelCatalogSync catalog=mock(YouTubeChannelCatalogSync.class);
- private final SocialFeedController controller=new SocialFeedController(jdbc,catalog);
+ private final SocialFeedController controller=new SocialFeedController(jdbc,catalog,true);
  {
   when(jdbc.query(anyString(),any(RowMapper.class),eq(false),eq(20))).thenReturn(List.of());
   when(catalog.status()).thenReturn(
@@ -34,6 +34,14 @@ class SocialFeedControllerTest {
   assertEquals(1,result.items().size());
   assertEquals("demo-food",result.items().get(0).id());
   assertEquals(0,result.realCount());
+ }
+ @Test void productionRejectsDemoEvenIfOldApkForcesIncludeDemoTrue() {
+  var production=new SocialFeedController(jdbc,catalog,false);
+  when(jdbc.query(anyString(),any(RowMapper.class),eq(20))).thenReturn(List.of());
+  var result=production.feed("","All",20,true);
+  assertEquals(0,result.demoCount());
+  assertFalse(result.demoContentIncluded());
+  assertTrue(result.items().isEmpty());
  }
  @Test void productionDefaultsNeverEnableDemoContent() {
   when(jdbc.query(anyString(),any(RowMapper.class),eq(40))).thenReturn(List.of());
