@@ -121,14 +121,17 @@ void main() {
     await tester.pumpWidget(const WeuTubeApp());
     await tester.tap(find.text('Create').last);
     await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'Before opening sign-in');
     await tester.ensureVisible(find.text('Sign in to upload'));
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'Create route at 320dp');
     await tester.tap(find.text('Sign in to upload'));
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'Initial sign-in at 320dp');
     await tester.ensureVisible(find.text('Sign In').last);
     await tester.pumpAndSettle();
     expect(find.text('Sign In'), findsWidgets);
-    expect(tester.takeException(), isNull);
+    expect(tester.takeException(), isNull, reason: 'After scrolling sign-in form');
   });
 
   testWidgets('signup rejects mismatched passwords without API call',
