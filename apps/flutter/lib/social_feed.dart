@@ -728,7 +728,8 @@ class _SocialHubState extends State<SocialHub> {
                     borderRadius:BorderRadius.circular(4)))
               ]))),
         ])),
-      Container(color:Colors.white,
+      if(items.isNotEmpty) ...[
+        Container(color:Colors.white,
         alignment:Alignment.centerLeft,
         padding:const EdgeInsets.fromLTRB(14,8,12,5),
         child:Row(children:[
@@ -738,7 +739,8 @@ class _SocialHubState extends State<SocialHub> {
             child:const Text('See all',style:TextStyle(
               color:coral,fontSize:11,fontWeight:FontWeight.w800)))
         ])),
-      ColoredBox(color:Colors.white,child:stories()),
+        ColoredBox(color:Colors.white,child:stories()),
+      ],
       if(loadError!=null)
         Container(width:double.infinity,
           padding:const EdgeInsets.symmetric(horizontal:12,vertical:4),
@@ -748,22 +750,33 @@ class _SocialHubState extends State<SocialHub> {
         ?Center(child:Column(mainAxisSize:MainAxisSize.min,children:[
           const Icon(Icons.people_outline_rounded,color:coral,size:45),
           const SizedBox(height:10),
-          Text(loading ? 'Loading channel videos…'
-            : channelSyncStatus == 'NOT_CONNECTED'
-              ? 'Connect a YouTube channel to import its videos'
-              : channelSyncStatus == 'IMPORTING' ||
-                channelSyncStatus == 'PENDING'
-                ? 'YouTube video import is running…'
-                : 'No public videos available yet',
+          Text(loading ? 'Loading videos…'
+            : feedChoice == 'Following' && items.isNotEmpty
+              ? 'You are not following any creators yet'
+              : loadError != null
+                ? 'Videos are temporarily unavailable'
+                : channelSyncStatus == 'IMPORTING' ||
+                  channelSyncStatus == 'PENDING'
+                  ? 'We are preparing the video feed'
+                  : channelSyncStatus == 'ERROR'
+                    ? 'We are having trouble updating videos'
+                    : 'No videos available yet',
             textAlign:TextAlign.center,
             style:const TextStyle(color:navy,
               fontWeight:FontWeight.w900,fontSize:16)),
           const SizedBox(height:7),
-          Text(loadError ?? 'WeuTube does not show fictional feed videos.',
+          Text(feedChoice == 'Following' && items.isNotEmpty
+              ? 'Explore creators to find videos you want to follow.'
+              : loadError ??
+                (channelSyncStatus == 'NOT_CONNECTED'
+                  ? 'The WeuTube team is setting up the shared video library.'
+                  : 'Only publicly available videos appear here.'),
             textAlign:TextAlign.center,
             style:const TextStyle(color:slate,fontSize:12)),
-          TextButton(onPressed:refresh,
-            child:const Text('Refresh videos'))
+          TextButton(onPressed:feedChoice == 'Following' && items.isNotEmpty
+              ? () => widget.onNavigate('Explore') : refresh,
+            child:Text(feedChoice == 'Following' && items.isNotEmpty
+              ? 'Discover creators' : 'Refresh videos'))
         ]))
         :RefreshIndicator(
           onRefresh:refresh,
