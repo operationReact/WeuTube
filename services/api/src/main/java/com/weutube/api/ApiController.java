@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api")
 public class ApiController {
+ @Value("${weutube.release-sha:unversioned}") private String releaseSha;
  @GetMapping("/public/status")
  public Map<String,Object> status() { return Map.of("service","weutube-api","mode","integration-pending","time",Instant.now().toString()); }
  @GetMapping("/me")
