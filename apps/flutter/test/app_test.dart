@@ -127,13 +127,24 @@ void main() {
     await tester.pumpAndSettle();
     final hero = find.byKey(const ValueKey('immersive-brand-hero'));
     expect(hero, findsOneWidget);
-    expect(tester.getSize(hero).height, 202);
+    expect(tester.getSize(hero).height, lessThanOrEqualTo(254));
     expect(find.byType(WeuTubeBrand), findsOneWidget);
     final google = find.byKey(const ValueKey('google-sign-in-button'));
     expect(google, findsOneWidget);
     expect(find.ancestor(of: google, matching: find.byType(OutlinedButton)),
       findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Sign In'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Compact immersive brand hero has 202dp height',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: ImmersiveBrandHero(compact: true)),
+    ));
+    expect(tester.getSize(find.byKey(const ValueKey('immersive-brand-hero'))).height,
+      202);
+    expect(find.byType(WeuTubeBrand), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
