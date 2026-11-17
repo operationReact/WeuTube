@@ -136,13 +136,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Compact immersive brand hero has 202dp height',
+  testWidgets('Unboxed animated brand occupies 160dp without a hero panel',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(body: ImmersiveBrandHero(compact: true)),
     ));
-    expect(tester.getSize(find.byKey(const ValueKey('immersive-brand-hero'))).height,
-      202);
+    final hero = find.byKey(const ValueKey('immersive-brand-hero'));
+    expect(tester.getSize(hero).height, 160);
+    expect(find.descendant(of: hero,
+      matching: find.byType(ClipRRect)), findsNothing);
+    expect(find.descendant(of: hero,
+      matching: find.byType(ColoredBox)), findsNothing);
     expect(find.byType(WeuTubeBrand), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -159,6 +163,29 @@ void main() {
     expect(find.byKey(const ValueKey('immersive-brand-hero')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('immersive-brand-hero')));
     await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('One continuous auth canvas connects original logo and login form',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const WeuTubeApp());
+    await tester.tap(find.text('Create').last);
+    await tester.pump();
+    await tester.ensureVisible(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    final canvas = find.byKey(const ValueKey('immersive-signin-canvas'));
+    expect(canvas, findsOneWidget);
+    expect(find.descendant(of: canvas,
+      matching: find.byType(WeuTubeBrand)), findsOneWidget);
+    expect(find.descendant(of: canvas,
+      matching: find.byKey(const ValueKey('google-sign-in-button'))),
+      findsOneWidget);
+    expect(find.text('or continue with email'), findsOneWidget);
+    expect(find.byType(TextFormField), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 
