@@ -131,8 +131,7 @@ void main() {
     expect(find.byType(WeuTubeBrand), findsOneWidget);
     final google = find.byKey(const ValueKey('google-sign-in-button'));
     expect(google, findsOneWidget);
-    expect(find.ancestor(of: google, matching: find.byType(OutlinedButton)),
-      findsOneWidget);
+    expect(tester.widget(google), isA<OutlinedButton>());
     expect(find.widgetWithText(FilledButton, 'Sign In'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
