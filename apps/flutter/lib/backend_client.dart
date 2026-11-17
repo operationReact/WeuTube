@@ -474,9 +474,12 @@ class WeuTubeApi {
     }
   }
 
-  /// Public, clearly differentiated demo fixtures and real published submissions.
-  Future<Map<String,dynamic>> publicFeed() async =>
-    asMap(await call('GET','/api/public/social/feed?limit=30&includeDemo=true',auth:false));
+  /// Production discovery contains real approved submissions and imported
+  /// public YouTube channel videos. Never request fictional demo fixtures.
+  Future<Map<String,dynamic>> publicFeed({bool shorts = false}) async =>
+    asMap(await call('GET', shorts
+      ? '/api/public/social/shorts?limit=60'
+      : '/api/public/social/feed?limit=60&includeDemo=false',auth:false));
   Future<Map<String,dynamic>> socialState() async =>
     asMap(await call('GET','/api/social/me'));
   Future<void> reactVideo(String id,String reaction,bool on) async {

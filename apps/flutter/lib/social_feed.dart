@@ -5,7 +5,6 @@ import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'backend_client.dart';
-import 'social_demo_data.dart';
 import 'social_design_widgets.dart';
 import 'youtube_embed.dart';
 import 'product_ui.dart' show navy, coral, soft, slate;
@@ -34,17 +33,19 @@ class SocialHub extends StatefulWidget {
 }
 
 class _SocialHubState extends State<SocialHub> {
-  static const demo = socialDemoPosts;
   final Set<String> liked = {}, saved = {}, following = {};
   final Map<String, List<String>> draftComments = {};
   final search = TextEditingController();
   final PageController shortsPager = PageController();
   final PageController homePager = PageController();
-  List<Map<String, dynamic>> items = List.from(demo);
+  List<Map<String, dynamic>> items = [];
   bool loading = false;
   String category = 'All';
   String feedChoice = 'For you';
   String? loadError;
+  String channelSyncStatus = 'PENDING';
+  int importedVideoCount = 0;
+  int connectedChannelCount = 0;
   int shortIndex = 0;
   int homeIndex = 0;
   bool showQuickHeart = false;
@@ -57,6 +58,17 @@ class _SocialHubState extends State<SocialHub> {
   }
 
   @override
+  void didUpdateWidget(covariant SocialHub oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.section != widget.section &&
+        (oldWidget.section == 'Shorts' || widget.section == 'Shorts')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) refresh();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     shortsPager.dispose();
     homePager.dispose();
@@ -65,6 +77,7 @@ class _SocialHubState extends State<SocialHub> {
   }
 
   bool isDemo(Map<String, dynamic> item) => item['demo'] == true;
+  bool isImported(Map<String, dynamic> item) => str(item['id']).startsWith('yt-');
   String str(dynamic value) => value?.toString() ?? '';
   String id(Map<String, dynamic> item) => str(item['id']);
   String image(Map<String, dynamic> item) => str(item['thumbnailUrl']);
@@ -72,6 +85,10 @@ class _SocialHubState extends State<SocialHub> {
   String followKey(Map<String,dynamic> item) =>
     str(item['creatorId']).isEmpty ? str(item['creator']) : str(item['creatorId']);
   void doubleTapLike(Map<String,dynamic> item) {
+    if(isImported(item)) {
+      openOnYouTube(item);
+      return;
+    }
     if(!liked.contains(id(item)))like(item);
     setState(()=>showQuickHeart=true);
     Future<void>.delayed(const Duration(milliseconds:550),(){
@@ -90,24 +107,40 @@ class _SocialHubState extends State<SocialHub> {
     if(loading) return;
     setState(() {loading = true;loadError = null;});
     try {
-      final result = await widget.api.publicFeed();
+      final result = await widget.api.publicFeed(
+        shorts: widget.section == 'Shorts');
       final received = (result['items'] as List<dynamic>? ?? [])
-          .whereType<Map<String, dynamic>>().toList();
+          .whereType<Map<String, dynamic>>()
+          .where((post) => post['demo'] != true).toList();
       if(!mounted) return;
-      setState(() {items = received.isEmpty ? List.of(demo) : received;});
+      setState(() {
+        items = received;
+        channelSyncStatus = str(result['channelSyncStatus']);
+        importedVideoCount = (result['importedVideos'] as num?)?.toInt() ?? 0;
+        connectedChannelCount = (result['connectedChannels'] as num?)?.toInt() ?? 0;
+        shortIndex = 0;
+        homeIndex = 0;
+      });
       if(widget.api.signedIn) {
-        final state = await widget.api.socialState();
-        if(!mounted) return;
-        setState(() {
-          liked.addAll((state['likedVideoIds'] as List<dynamic>? ?? []).map(str));
-          saved.addAll((state['savedVideoIds'] as List<dynamic>? ?? []).map(str));
-          following.addAll((state['followingCreatorIds'] as List<dynamic>? ?? []).map(str));
-        });
+        try {
+          final state = await widget.api.socialState();
+          if(!mounted) return;
+          setState(() {
+            liked.addAll((state['likedVideoIds'] as List<dynamic>? ?? []).map(str));
+            saved.addAll((state['savedVideoIds'] as List<dynamic>? ?? []).map(str));
+            following.addAll((state['followingCreatorIds'] as List<dynamic>? ?? []).map(str));
+          });
+        } catch (_) {
+          // A user's reaction-state request must never hide already loaded
+          // public YouTube videos or falsely trigger demo-mode fallback.
+          if(mounted) setState(() =>
+            loadError = 'Personal reactions unavailable; videos are still live.');
+        }
       }
     } catch(_) {
       if(mounted) setState(() {
-        loadError = 'Preview feed shown. Live discovery is temporarily unavailable.';
-        items = List.of(demo);
+        loadError = 'Real video feed is temporarily unavailable. Retry to refresh.';
+        items = [];
       });
     } finally {
       if(mounted) setState(() => loading = false);
@@ -120,6 +153,7 @@ class _SocialHubState extends State<SocialHub> {
   }
 
   Future<void> like(Map<String, dynamic> item) async {
+    if(isImported(item)) {await openOnYouTube(item);return;}
     final key = id(item), already = liked.contains(key);
     if(!isDemo(item) && !widget.api.signedIn) {widget.onSignIn();return;}
     setState(() => already ? liked.remove(key) : liked.add(key));
@@ -133,6 +167,7 @@ class _SocialHubState extends State<SocialHub> {
   }
 
   Future<void> save(Map<String, dynamic> item) async {
+    if(isImported(item)) {await openOnYouTube(item);return;}
     final key = id(item), already = saved.contains(key);
     if(!isDemo(item) && !widget.api.signedIn) {widget.onSignIn();return;}
     setState(() => already ? saved.remove(key) : saved.add(key));
@@ -145,6 +180,14 @@ class _SocialHubState extends State<SocialHub> {
   }
 
   Future<void> follow(Map<String, dynamic> item) async {
+    if(isImported(item)) {
+      final channel=str(item['creatorId']);
+      if(RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(channel)) {
+        await launchUrl(Uri.parse('https://www.youtube.com/channel/$channel'),
+          mode:LaunchMode.externalApplication);
+      }
+      return;
+    }
     final key = str(item['creatorId']).isNotEmpty ?
       str(item['creatorId']) : str(item['creator']);
     final already = following.contains(key);
@@ -159,6 +202,7 @@ class _SocialHubState extends State<SocialHub> {
   }
 
   void openComments(Map<String,dynamic> item) {
+    if(isImported(item)) {openOnYouTube(item);return;}
     final input = TextEditingController();
     final postId = id(item);
     final demoMode = isDemo(item);
@@ -369,8 +413,9 @@ class _SocialHubState extends State<SocialHub> {
               Text(str(item['handle']), maxLines: 1,
                 style: const TextStyle(color: Colors.white60, fontSize: 10))
             ])),
-          const Text('PUBLISHED', style: TextStyle(color: Colors.white70,
-            fontSize: 9, letterSpacing: 1, fontWeight: FontWeight.w800)),
+          Text(isImported(item) ? 'YOUTUBE' : 'PUBLISHED',
+            style: const TextStyle(color: Colors.white70,
+              fontSize: 9, letterSpacing: 1, fontWeight: FontWeight.w800)),
         ]),
         const SizedBox(height: 8),
         Text(str(item['title']), maxLines: 2,
@@ -600,6 +645,7 @@ class _SocialHubState extends State<SocialHub> {
       (box.localToGlobal(Offset.zero)&box.size):null;
     final caption=isDemo(item)
       ?'WeuTube sample preview (not a real creator post)'
+      :isImported(item)?'YouTube video discovered through WeuTube'
       :'Published on WeuTube';
     try {
       await SharePlus.instance.share(ShareParams(
@@ -702,13 +748,22 @@ class _SocialHubState extends State<SocialHub> {
         ?Center(child:Column(mainAxisSize:MainAxisSize.min,children:[
           const Icon(Icons.people_outline_rounded,color:coral,size:45),
           const SizedBox(height:10),
-          const Text('Your circle starts here',
-            style:TextStyle(color:navy,fontWeight:FontWeight.w900,fontSize:19)),
+          Text(loading ? 'Loading channel videos…'
+            : channelSyncStatus == 'NOT_CONNECTED'
+              ? 'Connect a YouTube channel to import its videos'
+              : channelSyncStatus == 'IMPORTING' ||
+                channelSyncStatus == 'PENDING'
+                ? 'YouTube video import is running…'
+                : 'No public videos available yet',
+            textAlign:TextAlign.center,
+            style:const TextStyle(color:navy,
+              fontWeight:FontWeight.w900,fontSize:16)),
           const SizedBox(height:7),
-          const Text('Follow a creator and their stories will appear here.',
-            style:TextStyle(color:slate,fontSize:12)),
-          TextButton(onPressed:()=>widget.onNavigate('Explore'),
-            child:const Text('Discover creators'))
+          Text(loadError ?? 'WeuTube does not show fictional feed videos.',
+            textAlign:TextAlign.center,
+            style:const TextStyle(color:slate,fontSize:12)),
+          TextButton(onPressed:refresh,
+            child:const Text('Refresh videos'))
         ]))
         :RefreshIndicator(
           onRefresh:refresh,
@@ -928,7 +983,33 @@ class _SocialHubState extends State<SocialHub> {
   }
 
   Widget shorts() {
-    if(items.isEmpty)return const Center(child:CircularProgressIndicator());
+    if(items.isEmpty)return Center(
+      child:Padding(
+        padding:const EdgeInsets.all(23),
+        child:Column(mainAxisSize:MainAxisSize.min,children:[
+          const Icon(Icons.smart_display_outlined,
+            color:coral,size:42),
+          const SizedBox(height:12),
+          Text(loading ? 'Loading real YouTube videos…'
+            : channelSyncStatus == 'NOT_CONNECTED'
+              ? 'YouTube channel not connected for discovery'
+              : channelSyncStatus == 'IMPORTING' ||
+                  channelSyncStatus == 'PENDING'
+                ? 'Importing videos from the YouTube channel…'
+                : 'No public short-form videos available yet',
+            textAlign:TextAlign.center,
+            style:const TextStyle(color:navy,
+              fontSize:15,fontWeight:FontWeight.w800)),
+          const SizedBox(height:8),
+          Text(loadError ?? 'No sample Shorts or fictional creator metrics.',
+            textAlign:TextAlign.center,
+            style:const TextStyle(color:slate,fontSize:12)),
+          TextButton.icon(onPressed:refresh,
+            icon:const Icon(Icons.refresh),
+            label:const Text('Refresh channel videos'))
+        ]),
+      ),
+    );
     return PageView.builder(
       controller:shortsPager,scrollDirection:Axis.vertical,
       onPageChanged:(index)=>setState(()=>shortIndex=index),

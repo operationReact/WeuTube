@@ -199,12 +199,25 @@ jobs:
             test "$unauth" = 401 && test "$malformed" = 401
           done
 
-          curl --fail --silent --show-error --max-time 20 'https://api.weutube.com/api/public/social/feed?limit=25' \
-            | jq -e '.demoContentIncluded == true and .demoCount >= 12 and
-                     (.items | any(.creator == "Aanya Rao")) and
-                     (.items | any(.creator == "Diya Nair")) and
-                     (.items | all(.demo != true or (.avatarUrl != null and .videoUrl != null)))' >/dev/null
-          echo "Verified the new twelve-creator demo feed alongside actual published video support"
+          # Production MUST NOT claim mock videos or invented creator metrics.
+          live_feed="$(curl --fail --silent --show-error --max-time 20 \
+            'https://api.weutube.com/api/public/social/feed?limit=5')"
+          printf '%s' "$live_feed" | jq -e \
+            '.demoCount == 0 and .demoContentIncluded == false and
+             (.items | all(.demo == false)) and
+             (.channelSyncStatus | type == "string") and
+             (.importedVideos | type == "number")' >/dev/null
+          short_feed="$(curl --fail --silent --show-error --max-time 20 \
+            'https://api.weutube.com/api/public/social/shorts?limit=5')"
+          printf '%s' "$short_feed" | jq -e \
+            '.demoCount == 0 and .demoContentIncluded == false and
+              (.items | all(.demo == false))' >/dev/null
+          printf '%s' "$live_feed" | jq -c \
+            '{channelSyncStatus,connectedChannels,importedVideos,shortCandidates,realCount}'
+          if printf '%s' "$live_feed" | jq -e '.channelSyncStatus == "NOT_CONNECTED"' >/dev/null; then
+            echo "::warning::No authorized YouTube channel grant found; Google OAuth client configuration is not a connected YouTube channel."
+          fi
+          echo "Verified production feed and Shorts return no sample creators or fictional video metrics"
           # Published-video comments are public; mutations still require Cognito.
           curl --silent --show-error --max-time 12 -o /dev/null -w '%{http_code}' \
             'https://api.weutube.com/api/social/videos/00000000-0000-0000-0000-000000000000/comments' \
@@ -226,5 +239,5 @@ jobs:
             echo "Elastic IP: $API_EIP"
             echo "YouTube-channel OAuth redirect: https://api.weutube.com/api/admin/youtube/callback"
             echo "User Google sign-in: federated via Cognito when separately configured"
-            echo "Immersive social v2, native sharing, guest-readable comments and twelve labelled demo creators deployed; real engagement remains authenticated."
+            echo "Real YouTube channel discovery and Shorts candidates, no demo feed; actual catalog import counts shown in deployment logs. Real engagement remains authenticated."
           } >> "$GITHUB_STEP_SUMMARY"
