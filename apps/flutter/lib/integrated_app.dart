@@ -582,7 +582,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     );
 
     if(signInPage) {
-      return Align(
+      return ImmersiveSignInCanvas(child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 490),
@@ -590,7 +590,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               PremiumSignInHeader(compact: mobile),
-              const SizedBox(height: 17),
+              const SizedBox(height: 13),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: mobile ? 12 : 0),
                 child: Column(
@@ -631,13 +631,13 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                     const SizedBox(height: 12),
                     const Row(children: [
                       Expanded(child: Divider(color: Color(0xFFE0E4ED))),
-                      Flexible(child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 11),
-                        child: Text('or sign in with email',
-                          maxLines: 2,
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 9),
+                        child: Text('or continue with email',
+                          maxLines: 1,
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: slate, fontSize: 12,
-                            fontWeight: FontWeight.w600)))),
+                          style: TextStyle(color: slate, fontSize: 11,
+                            fontWeight: FontWeight.w600))),
                       Expanded(child: Divider(color: Color(0xFFE0E4ED))),
                     ]),
                     const SizedBox(height: 12),
@@ -648,7 +648,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
             ],
           ),
         ),
-      );
+      ));
     }
     // Preserve the existing real Cognito sign-up, recovery and MFA flows.
     return Align(alignment: Alignment.topCenter,
