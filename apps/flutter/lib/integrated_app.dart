@@ -631,13 +631,14 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                     const SizedBox(height: 12),
                     const Row(children: [
                       Expanded(child: Divider(color: Color(0xFFE0E4ED))),
-                      Flexible(child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 11),
-                        child: Text('or sign in with email',
-                          maxLines: 2,
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('or use email',
+                          maxLines: 1,
+                          softWrap: false,
                           textAlign: TextAlign.center,
                           style: TextStyle(color: slate, fontSize: 12,
-                            fontWeight: FontWeight.w600)))),
+                            fontWeight: FontWeight.w600))),
                       Expanded(child: Divider(color: Color(0xFFE0E4ED))),
                     ]),
                     const SizedBox(height: 12),
