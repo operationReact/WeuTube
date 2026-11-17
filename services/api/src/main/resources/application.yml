@@ -38,6 +38,8 @@ weutube:
   cognito:
     region: ${WEUTUBE_COGNITO_REGION:ap-south-1}
     client-id: ${WEUTUBE_COGNITO_CLIENT_ID:}
+    google-enabled: ${WEUTUBE_GOOGLE_LOGIN_ENABLED:false}
+    hosted-ui-domain: ${WEUTUBE_COGNITO_HOSTED_UI_DOMAIN:}
   youtube:
     ssm-enabled: ${WEUTUBE_YOUTUBE_SSM_ENABLED:false}
     creator-auto-upload-enabled: ${WEUTUBE_YOUTUBE_CREATOR_AUTO_UPLOAD_ENABLED:false}

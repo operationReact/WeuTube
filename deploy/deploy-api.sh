@@ -4,8 +4,8 @@
 set -euo pipefail
 umask 077
 
-if [ "$#" -lt 4 ] || [ "$#" -gt 6 ]; then
-  echo "Usage: deploy-api.sh <artifact-bucket> <commit-sha> <api-domain> <cognito-issuer> [bootstrap|verify] [cognito-client-id]" >&2
+if [ "$#" -lt 4 ] || [ "$#" -gt 8 ]; then
+  echo "Usage: deploy-api.sh <artifact-bucket> <commit-sha> <api-domain> <cognito-issuer> [bootstrap|verify] [cognito-client-id] [google-enabled] [cognito-login-domain]" >&2
   exit 2
 fi
 BUCKET="$1"
@@ -14,6 +14,10 @@ DOMAIN="$3"
 ISSUER="$4"
 MODE="${5:-verify}"
 AUTH_CLIENT_ID="${6:-}"
+GOOGLE_ENABLED="${7:-false}"
+GOOGLE_DOMAIN="${8:-}"
+[[ "$GOOGLE_ENABLED" == "true" || "$GOOGLE_ENABLED" == "false" ]] || { echo "Invalid Google configuration" >&2; exit 2; }
+[[ -z "$GOOGLE_DOMAIN" || "$GOOGLE_DOMAIN" =~ ^https://[a-z0-9.-]+\.amazoncognito\.com$ ]] || { echo "Invalid Cognito login domain" >&2; exit 2; }
 [[ "$MODE" == "bootstrap" || "$MODE" == "verify" ]] || { echo "Unsupported health-check mode" >&2; exit 2; }
 REGION="ap-south-1"
 [[ -z "$AUTH_CLIENT_ID" || "$AUTH_CLIENT_ID" =~ ^[a-zA-Z0-9]{10,128}$ ]] || { echo "Invalid Cognito client" >&2; exit 2; }
@@ -92,6 +96,8 @@ DATABASE_PASSWORD=$POSTGRES_PASSWORD
 COGNITO_ISSUER_URI=$ISSUER
 WEUTUBE_COGNITO_REGION=$REGION
 WEUTUBE_COGNITO_CLIENT_ID=$AUTH_CLIENT_ID
+WEUTUBE_GOOGLE_LOGIN_ENABLED=$GOOGLE_ENABLED
+WEUTUBE_COGNITO_HOSTED_UI_DOMAIN=$GOOGLE_DOMAIN
 WEUTUBE_YOUTUBE_SSM_ENABLED=true
 WEUTUBE_RELEASE_SHA=$COMMIT
 # Operator-authorized shared-channel creator uploads; uploads remain PRIVATE until review.

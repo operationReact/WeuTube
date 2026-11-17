@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'immersive_sign_in.dart';
 import 'backend_client.dart';
 import 'admin_panel.dart';
 import 'social_feed.dart';
@@ -141,6 +143,17 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       page='Sign In';
     });
   }
+  Future<void> signInWithGoogle() => perform(() async {
+    try {
+      await api.loginWithGoogle();
+    } on ApiFailure catch (failure) {
+      message(failure.message);
+      rethrow;
+    }
+    if(!mounted) return;
+    await navigate(afterLogin);
+    afterLogin = 'Home';
+  });
   Future<void> signIn() => perform(() async {
     if(!(form.currentState?.validate() ?? false)) return;
     final result=await api.login(email.text.trim(),password.text);
@@ -444,13 +457,15 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: const TextStyle(
-            color: navy, fontSize: 29, height: 1.15,
-            fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          Text(subtitle, style: const TextStyle(
-            color: slate, fontSize: 14, height: 1.45)),
-          const SizedBox(height: 25),
+          if(!signInPage) ...[
+            Text(title, style: const TextStyle(
+              color: navy, fontSize: 29, height: 1.15,
+              fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            Text(subtitle, style: const TextStyle(
+              color: slate, fontSize: 14, height: 1.45)),
+            const SizedBox(height: 25),
+          ],
           if(signup) authInput('Full Name', fullName, isName: true),
           if(!reset && !mfa)
             authInput('Email Address', email, isEmail: true),
@@ -563,18 +578,80 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       )),
     );
 
-    // On mobile, authentication is page content rather than a giant
-    // vertically centered white dashboard card.
+    if(signInPage) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 490),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PremiumSignInHeader(compact: mobile),
+              const SizedBox(height: 22),
+              SizedBox(
+                height: 56,
+                child: FilledButton(
+                  key: const ValueKey('google-sign-in-button'),
+                  onPressed: busy ? null : signInWithGoogle,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: coral,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18))),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 32, height: 32, padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(color: Colors.white,
+                          borderRadius: BorderRadius.circular(10)),
+                        child: SvgPicture.asset('assets/brand/google-g.svg')),
+                      const SizedBox(width: 12),
+                      const Expanded(child: Text('Continue with Google',
+                        textAlign: TextAlign.center,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 15,
+                          fontWeight: FontWeight.w800))),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Row(children: [
+                SizedBox(width: 23, child: Divider(color: Color(0xFFD5DAE5))),
+                Expanded(child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('or sign in with email',
+                    maxLines: 2, softWrap: true,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: slate, fontSize: 12,
+                      fontWeight: FontWeight.w600)))),
+                SizedBox(width: 23, child: Divider(color: Color(0xFFD5DAE5))),
+              ]),
+              const SizedBox(height: 21),
+              fields,
+            ],
+          ),
+        ),
+      );
+    }
+    // Preserve the existing real Cognito sign-up, recovery and MFA flows.
     return Align(alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 430),
-        child: mobile ? fields : Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE6EAF0))),
-          child: fields)));
+        child: Column(children: [
+          const WeuTubeBrand(size: 24),
+          const SizedBox(height: 24),
+          mobile ? fields : Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE6EAF0))),
+            child: fields),
+        ])));
   }
 
   Widget dashboard(double width) => Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -823,7 +900,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
       drawer:api.signedIn&&!wide&&!isSocial
         ?Drawer(child:SafeArea(child:sideNav())):null,
       body:SafeArea(child:Column(children:[
-        if(page!='Shorts') Container(height:wide?62:54,
+        if(page!='Shorts' && !isAuth) Container(height:wide?62:54,
           padding:const EdgeInsets.symmetric(horizontal:15),
           decoration:const BoxDecoration(color:Colors.white,
             border:Border(bottom:BorderSide(color:Color(0xFFE9ECF3)))),

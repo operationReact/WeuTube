@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weutube/main.dart';
+import 'package:weutube/immersive_sign_in.dart';
 import 'package:weutube/upload_composer.dart';
 import 'package:weutube/backend_client.dart';
 import 'package:weutube/product_ui.dart' show WeuTubeBrand;
@@ -41,6 +42,8 @@ void main() {
     expect(find.text('Welcome Back'), findsOneWidget);
     expect(find.text('Email Address'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
+    await tester.ensureVisible(find.text('New to WeuTube? Create Account'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('New to WeuTube? Create Account'));
     await tester.pumpAndSettle();
     expect(find.text('Full Name'), findsOneWidget);
@@ -80,6 +83,8 @@ void main() {
     expect(find.text('Welcome Back'), findsOneWidget);
     await tester.ensureVisible(find.text('New to WeuTube? Create Account'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('New to WeuTube? Create Account'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('New to WeuTube? Create Account'));
     await tester.pumpAndSettle();
     expect(find.byType(WeuTubeBrand), findsOneWidget);
@@ -87,6 +92,46 @@ void main() {
     expect(find.text('Confirm Password'), findsOneWidget);
     expect(find.text('Use at least 12 characters for your password.'),
       findsOneWidget);
+  });
+
+  testWidgets('Premium sign-in renders animated original brand and Google-first CTA',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const WeuTubeApp());
+    await tester.tap(find.text('Create').last);
+    await tester.pump();
+    await tester.ensureVisible(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ImmersiveBrandHero), findsOneWidget);
+    expect(find.byType(WeuTubeBrand), findsOneWidget);
+    expect(find.text('Your stories. Our community.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('google-sign-in-button')), findsOneWidget);
+    expect(find.byType(AutofillGroup), findsOneWidget);
+    expect(find.byType(TextFormField), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Compact 320dp sign-in remains scrollable without overflow',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const WeuTubeApp());
+    await tester.tap(find.text('Create').last);
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'Before opening sign-in');
+    await tester.ensureVisible(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'Create route at 320dp');
+    await tester.tap(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'Initial sign-in at 320dp');
+    await tester.ensureVisible(find.text('Sign In').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Sign In'), findsWidgets);
+    expect(tester.takeException(), isNull, reason: 'After scrolling sign-in form');
   });
 
   testWidgets('signup rejects mismatched passwords without API call',
@@ -97,6 +142,8 @@ void main() {
     await tester.ensureVisible(find.text('Sign in to upload'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('New to WeuTube? Create Account'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('New to WeuTube? Create Account'));
     await tester.pumpAndSettle();

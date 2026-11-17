@@ -13,6 +13,8 @@ dependencies:
   shared_preferences: ^2.5.3
   url_launcher: ^6.3.2
   flutter_svg: ^2.0.17
+  flutter_web_auth_2: ^5.1.0
+  crypto: ^3.0.6
   video_player: ^2.9.5
   youtube_player_iframe: 6.0.2
   share_plus: ^11.1.0
@@ -24,3 +26,4 @@ flutter:
   assets:
     - assets/brand/weutube-logo.svg
     - assets/brand/weutube-icon.svg
+    - assets/brand/google-g.svg

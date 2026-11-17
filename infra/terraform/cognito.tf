@@ -28,12 +28,61 @@ resource "aws_cognito_user_pool" "weutube" {
     attributes_require_verification_before_update = ["email"]
   }
 }
+# Google user sign-in is a distinct OAuth integration from YouTube channel grants.
+# Keep it OFF until the Google Console OAuth web client has been provisioned.
+# Place its credentials in SSM SecureString (never in Terraform variables or Git).
+variable "enable_google_login" {
+  type = bool
+  default = false
+}
+data "aws_ssm_parameter" "google_login_client_id" {
+  count = var.enable_api && var.enable_google_login ? 1 : 0
+  name = "/weutube/prod/google-login/client-id"
+  with_decryption = true
+}
+data "aws_ssm_parameter" "google_login_client_secret" {
+  count = var.enable_api && var.enable_google_login ? 1 : 0
+  name = "/weutube/prod/google-login/client-secret"
+  with_decryption = true
+}
+resource "aws_cognito_identity_provider" "google" {
+  count = var.enable_api && var.enable_google_login ? 1 : 0
+  user_pool_id = aws_cognito_user_pool.weutube[0].id
+  provider_name = "Google"
+  provider_type = "Google"
+  provider_details = {
+    authorize_scopes = "openid email profile"
+    client_id = data.aws_ssm_parameter.google_login_client_id[0].value
+    client_secret = data.aws_ssm_parameter.google_login_client_secret[0].value
+  }
+  attribute_mapping = {
+    email = "email"
+    name = "name"
+  }
+}
+resource "aws_cognito_user_pool_domain" "login" {
+  count = var.enable_api ? 1 : 0
+  domain = "${local.prefix}-login-098859530205"
+  user_pool_id = aws_cognito_user_pool.weutube[0].id
+}
 resource "aws_cognito_user_pool_client" "weutube" {
   count = var.enable_api ? 1 : 0
   name = "${local.prefix}-creator"
   user_pool_id = aws_cognito_user_pool.weutube[0].id
   generate_secret = false
   explicit_auth_flows = ["ALLOW_USER_SRP_AUTH", "ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
+  # Keep existing USER_PASSWORD_AUTH and refresh flow enabled alongside PKCE.
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows = ["code"]
+  allowed_oauth_scopes = ["openid", "email", "profile"]
+  callback_urls = [
+    "weutube://auth-callback",
+    "https://weutube.com/auth.html",
+    "https://www.weutube.com/auth.html"
+  ]
+  logout_urls = ["https://weutube.com/", "https://www.weutube.com/"]
+  supported_identity_providers = var.enable_google_login ? ["COGNITO", "Google"] : ["COGNITO"]
+  depends_on = [aws_cognito_identity_provider.google]
   prevent_user_existence_errors = "ENABLED"
   enable_token_revocation = true
   access_token_validity = 60
@@ -59,4 +108,11 @@ output "cognito_client_id" {
 }
 output "cognito_issuer_uri" {
   value = var.enable_api ? "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.weutube[0].id}" : null
+}
+
+output "google_login_enabled" {
+  value = var.enable_api && var.enable_google_login
+}
+output "cognito_login_domain" {
+  value = var.enable_api ? "https://${aws_cognito_user_pool_domain.login[0].domain}.auth.${var.aws_region}.amazoncognito.com" : ""
 }

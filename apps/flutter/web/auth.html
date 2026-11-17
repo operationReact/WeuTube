@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="referrer" content="no-referrer"/><title>Return to WeuTube</title></head>
+<body style="font-family:system-ui,sans-serif;text-align:center;margin:20vh auto;color:#031B4B">
+<p>Returning to WeuTube…</p>
+<script>
+(function () {
+  'use strict';
+  const callback = window.location.href;
+  // Remove authorization code from the browser address bar/history.
+  window.history.replaceState(null, '', window.location.pathname);
+  const message = {'flutter-web-auth-2': callback};
+  if (window.opener) {
+    window.opener.postMessage(message, window.location.origin);
+    window.close();
+  } else if (window.parent !== window) {
+    window.parent.postMessage(message, window.location.origin);
+  } else {
+    // Fallback recommended by flutter_web_auth_2 for browser redirects.
+    localStorage.setItem('flutter-web-auth-2', callback);
+    window.close();
+  }
+})();
+</script>
+</body></html>
