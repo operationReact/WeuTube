@@ -433,10 +433,6 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
           icon: const Icon(Icons.video_library_outlined,size: 18),
           label: const Text('View My Videos'))),
     ],
-    const SizedBox(height: 12),
-    Text('App revision: ${appRevision.length > 8
-      ? appRevision.substring(0,8) : appRevision}',
-      style: const TextStyle(color: slate,fontSize: 11)),
   ]);
 
   Widget _fieldLabel(String text) => Padding(
@@ -601,6 +597,12 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
           const SizedBox(height: 5),
           const Text('Upload directly from your device.',
             style: TextStyle(color: slate,fontSize: 13)),
+          if (_access != UploadAccess.ready) ...[
+            const SizedBox(height: 5),
+            Text('App revision: ${appRevision.length > 8
+              ? appRevision.substring(0,8) : appRevision}',
+              style: const TextStyle(color: slate,fontSize: 11)),
+          ],
           const SizedBox(height: 10),
           if (_access == UploadAccess.signedOut)
             _blocked('Sign in to get started',
