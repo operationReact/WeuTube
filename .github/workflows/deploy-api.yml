@@ -47,6 +47,11 @@ jobs:
           echo "ARTIFACT_BUCKET=$(terraform output -raw api_artifacts_bucket)" >> "$GITHUB_ENV"
           echo "COGNITO_ISSUER=$(terraform output -raw cognito_issuer_uri)" >> "$GITHUB_ENV"
           echo "COGNITO_CLIENT_ID=$(terraform output -raw cognito_client_id)" >> "$GITHUB_ENV"
+          # These outputs are opt-in and may not yet exist in old state.
+          google_enabled="$(terraform output -raw google_login_enabled 2>/dev/null || echo false)"
+          cognito_domain="$(terraform output -raw cognito_login_domain 2>/dev/null || echo '')"
+          echo "GOOGLE_ENABLED=$google_enabled" >> "$GITHUB_ENV"
+          echo "COGNITO_LOGIN_DOMAIN=$cognito_domain" >> "$GITHUB_ENV"
           echo "DEPLOY_ROLE=$(terraform output -raw github_api_deploy_role_arn)" >> "$GITHUB_ENV"
       - name: Verify required encrypted SSM parameters without exposing values
         run: |
@@ -120,7 +125,7 @@ jobs:
           set -euo pipefail
           test "$(aws sts get-caller-identity --query Account --output text)" = "098859530205"
           base="s3://$ARTIFACT_BUCKET/releases/$GITHUB_SHA"
-          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --region ap-south-1 --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' api.weutube.com '$COGNITO_ISSUER' verify '$COGNITO_CLIENT_ID'"
+          cmd="mkdir -p /opt/weutube && aws s3 cp '$base/deploy-api.sh' /opt/weutube/deploy-api.sh --region ap-south-1 --only-show-errors && bash /opt/weutube/deploy-api.sh '$ARTIFACT_BUCKET' '$GITHUB_SHA' api.weutube.com '$COGNITO_ISSUER' verify '$COGNITO_CLIENT_ID' '$GOOGLE_ENABLED' '$COGNITO_LOGIN_DOMAIN'"
           params="$(jq -nc --arg cmd "$cmd" '{commands:[$cmd],executionTimeout:["1800"]}')"
           command_id="$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
@@ -148,6 +153,11 @@ jobs:
           done
           curl --fail --silent --show-error --max-time 15 https://api.weutube.com/actuator/health
           curl --fail --silent --show-error --max-time 15 -o /dev/null https://weutube.com/
+          # Public login discovery must fail closed until Google's identity provider is ready.
+          google_config="$(curl --fail --silent --show-error --max-time 15 https://api.weutube.com/api/public/auth/google-config)"
+          echo "$google_config" | jq -e '(.enabled | type) == "boolean" and
+            .nativeRedirectUri == "weutube://auth-callback" and
+            .webRedirectUri == "https://weutube.com/auth.html"' >/dev/null
           # Stable APK path must be served from the SAME tested web revision.
           curl --fail --silent --show-error --head --max-time 15             https://weutube.com/downloads/weutube-test.apk >/dev/null
           curl --fail --silent --show-error --max-time 15 https://api.weutube.com/api/public/status |
@@ -196,6 +206,7 @@ jobs:
             echo "Android TEST APK (debug-signed, not Play Store ready): https://weutube.com/downloads/weutube-test.apk"
             echo "SHA-256: https://weutube.com/downloads/weutube-test.apk.sha256"
             echo "Elastic IP: $API_EIP"
-            echo "Google OAuth redirect: https://api.weutube.com/api/admin/youtube/callback"
+            echo "YouTube-channel OAuth redirect: https://api.weutube.com/api/admin/youtube/callback"
+            echo "User Google sign-in: federated via Cognito when separately configured"
             echo "Immersive social v2, native sharing, guest-readable comments and twelve labelled demo creators deployed; real engagement remains authenticated."
           } >> "$GITHUB_STEP_SUMMARY"
