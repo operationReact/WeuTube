@@ -184,6 +184,8 @@ public class YouTubeChannelCatalogSync {
  }
  private static Long count(JsonNode stats,String field) {
   JsonNode value=stats.path(field);
-  return value.canConvertToLong()?value.longValue():null;
+  if(value.isMissingNode()||value.isNull())return null;
+  try {return Long.parseLong(value.asText());}
+  catch(NumberFormatException ex){return null;}
  }
 }
