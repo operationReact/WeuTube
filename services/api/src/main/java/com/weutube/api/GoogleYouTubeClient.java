@@ -110,7 +110,7 @@ public class GoogleYouTubeClient {
   String url="https://www.googleapis.com/youtube/v3/"+resource
     +"?"+String.join("&",params);
   try {
-   return http.get().uri(url).headers(h->h.setBearerAuth(accessToken))
+   return http.get().uri(java.net.URI.create(url)).headers(h->h.setBearerAuth(accessToken))
      .retrieve().body(JsonNode.class);
   } catch (RestClientException ex) {
    throw new ProviderException("YouTube catalog metadata read failed",ex);
