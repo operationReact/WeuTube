@@ -217,7 +217,12 @@ jobs:
           if printf '%s' "$live_feed" | jq -e '.channelSyncStatus == "NOT_CONNECTED"' >/dev/null; then
             echo "::warning::No authorized YouTube channel grant found; Google OAuth client configuration is not a connected YouTube channel."
           fi
-          echo "Verified production feed and Shorts return no sample creators or fictional video metrics"
+          legacy_feed="$(curl --fail --silent --show-error --max-time 20 \
+            'https://api.weutube.com/api/public/social/feed?limit=5&includeDemo=true')"
+          printf '%s' "$legacy_feed" | jq -e \
+            '.demoCount == 0 and .demoContentIncluded == false and
+              (.items | all(.demo == false))' >/dev/null
+          echo "Verified production and legacy APK clients cannot request demo videos"
           # Published-video comments are public; mutations still require Cognito.
           curl --silent --show-error --max-time 12 -o /dev/null -w '%{http_code}' \
             'https://api.weutube.com/api/social/videos/00000000-0000-0000-0000-000000000000/comments' \

@@ -3,6 +3,8 @@ package com.weutube.api;
 import java.time.Instant;
 import java.util.*;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -15,9 +17,15 @@ import org.springframework.web.bind.annotation.*;
 public class SocialFeedController {
  private final JdbcTemplate jdbc;
  private final YouTubeChannelCatalogSync catalog;
+ private final boolean demoEnabled;
 
- public SocialFeedController(JdbcTemplate jdbc,YouTubeChannelCatalogSync catalog) {
-  this.jdbc=jdbc;this.catalog=catalog;
+ @Autowired
+ public SocialFeedController(JdbcTemplate jdbc,YouTubeChannelCatalogSync catalog,
+     @Value("${weutube.social.demo-enabled:false}") boolean demoEnabled) {
+  this.jdbc=jdbc;this.catalog=catalog;this.demoEnabled=demoEnabled;
+ }
+ SocialFeedController(JdbcTemplate jdbc,YouTubeChannelCatalogSync catalog) {
+  this(jdbc,catalog,false);
  }
 
  public record FeedItem(String id,String title,String creator,String creatorId,
@@ -121,7 +129,7 @@ public class SocialFeedController {
     Comparator.nullsLast(Comparator.reverseOrder())));
   if(result.size()>cap)result=new ArrayList<>(result.subList(0,cap));
   int realCount=result.size(),demoCount=0;
-  if(includeDemo)for(FeedItem item:DEMO) {
+  if(includeDemo && demoEnabled)for(FeedItem item:DEMO) {
    if(result.size()>=cap)break;
    if((topic.equals("all")||item.category().toLowerCase(Locale.ROOT).equals(topic))
        &&matches(item,searchTerm)){result.add(item);demoCount++;}
