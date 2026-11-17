@@ -599,8 +599,10 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
             style: TextStyle(color: slate,fontSize: 13)),
           if (_access != UploadAccess.ready) ...[
             const SizedBox(height: 5),
-            Text('App revision: ${appRevision.length > 8
-              ? appRevision.substring(0,8) : appRevision}',
+            Text('App revision: ${appRevision == 'unversioned'
+              ? appRevision
+              : (appRevision.length > 8
+                ? appRevision.substring(0,8) : appRevision)}',
               style: const TextStyle(color: slate,fontSize: 11)),
           ],
           const SizedBox(height: 10),
