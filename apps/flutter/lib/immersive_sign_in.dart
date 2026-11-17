@@ -95,11 +95,11 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
                       _satellite(center, ellipseY, t, 3, Icons.bar_chart_rounded),
                       // The approved source SVG is rendered unchanged on a floating card.
                       Positioned(
-                        left: center - math.min(w * .37, 170),
-                        width: math.min(w * .74, 340),
+                        left: center - math.min(w * .37, 170.0),
+                        width: math.min(w * .74, 340.0),
                         top: height * (.335 + .085 * (1 - settle)),
                         child: Opacity(
-                          opacity: math.max(0, (t - .22) / .25).clamp(0.0, 1.0),
+                          opacity: math.max(0.0, (t - .22) / .25).clamp(0.0, 1.0),
                           child: Transform(
                             alignment: Alignment.center,
                             transform: Matrix4.identity()
@@ -151,7 +151,7 @@ class _ImmersiveBrandHeroState extends State<ImmersiveBrandHero>
     return Positioned(
       left: x, top: y + 13 * (1 - t),
       child: Opacity(
-        opacity: math.max(0, (t - .08) / .4).clamp(0, 1),
+        opacity: math.max(0.0, (t - .08) / .4).clamp(0.0, 1.0),
         child: Transform.scale(
           scale: depth,
           child: Transform.rotate(
@@ -184,7 +184,7 @@ class _OrbitPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height * .47);
     final area = Rect.fromCenter(center: center,
-      width: math.min(size.width * .94, 375), height: size.height * .45);
+      width: math.min(size.width * .94, 375.0), height: size.height * .45);
     final base = Paint()..style = PaintingStyle.stroke..strokeWidth = 1.8;
     canvas.drawArc(area, -.3, math.pi * 1.8, false,
       base..color = const Color(0xFF526C9B));
@@ -196,7 +196,7 @@ class _OrbitPainter extends CustomPainter {
       base..color = const Color(0xFFB0CDF8));
     final anchor = Offset(center.dx, size.height * .71);
     canvas.drawOval(Rect.fromCenter(center: anchor,
-      width: math.min(size.width * .77, 310), height: 22),
+      width: math.min(size.width * .77, 310.0), height: 22),
       Paint()..color = const Color(0x5B030E2E));
     final pin = Paint()..color = const Color(0xFFFF7B63);
     canvas.drawCircle(Offset(center.dx + area.width * .43, center.dy - 5), 4, pin);
