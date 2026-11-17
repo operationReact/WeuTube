@@ -496,10 +496,13 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
           ],
           if(signInPage) Align(alignment: Alignment.centerRight,
             child: TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 1)),
               onPressed: busy ? null : () => navigate('Forgot Password'),
               child: const Text('Forgot password?',
                 style: TextStyle(color: navy,
-                  fontSize: 13, fontWeight: FontWeight.w700)))),
+                  fontSize: 12, fontWeight: FontWeight.w700)))),
           if(error.isNotEmpty) Container(
             margin: const EdgeInsets.only(bottom: 14),
             padding: const EdgeInsets.all(12),
@@ -512,7 +515,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
               Expanded(child: Text(error, style: const TextStyle(
                 color: navy, fontSize: 12))),
             ])),
-          const SizedBox(height: 7),
+          SizedBox(height: signInPage ? 2 : 7),
           if(signInPage) authAction('Sign In', signIn),
           if(signup) authAction('Create Account', signUp),
           if(confirm) authAction('Confirm Email', () => perform(() async {
@@ -554,7 +557,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                 message('A new code was requested.');
               }),
               child: const Text('Resend verification code'))),
-          const SizedBox(height: 18),
+          SizedBox(height: signInPage ? 8 : 18),
           Center(child: TextButton(
             onPressed: busy ? null : () =>
               navigate(signup ? 'Sign In' : signInPage
@@ -566,7 +569,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
                 color: navy, fontSize: 13,
                 fontWeight: FontWeight.w700)))),
           if(signInPage || signup) ...[
-            const SizedBox(height: 15),
+            SizedBox(height: signInPage ? 2 : 15),
             Center(child: TextButton.icon(
               onPressed: busy ? null : () => navigate('Home'),
               icon: const Icon(Icons.arrow_back_rounded, size: 17),
@@ -587,51 +590,61 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               PremiumSignInHeader(compact: mobile),
-              const SizedBox(height: 22),
-              SizedBox(
-                height: 56,
-                child: FilledButton(
-                  key: const ValueKey('google-sign-in-button'),
-                  onPressed: busy ? null : signInWithGoogle,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: coral,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18))),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 32, height: 32, padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(color: Colors.white,
-                          borderRadius: BorderRadius.circular(10)),
-                        child: SvgPicture.asset('assets/brand/google-g.svg')),
-                      const SizedBox(width: 12),
-                      const Expanded(child: Text('Continue with Google',
-                        textAlign: TextAlign.center,
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 15,
-                          fontWeight: FontWeight.w800))),
-                    ],
-                  ),
+              const SizedBox(height: 17),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: mobile ? 12 : 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      height: 52,
+                      child: OutlinedButton(
+                        key: const ValueKey('google-sign-in-button'),
+                        onPressed: busy ? null : signInWithGoogle,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: navy,
+                          side: const BorderSide(
+                            color: Color(0xFFCFD5E1), width: 1.2),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15))),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 25, height: 25,
+                              child: SvgPicture.asset(
+                                'assets/brand/google-g.svg'),
+                            ),
+                            const SizedBox(width: 10),
+                            const Flexible(child: Text('Continue with Google',
+                              textAlign: TextAlign.center,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 15,
+                                fontWeight: FontWeight.w800))),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Row(children: [
+                      Expanded(child: Divider(color: Color(0xFFE0E4ED))),
+                      Flexible(child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 11),
+                        child: Text('or sign in with email',
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: slate, fontSize: 12,
+                            fontWeight: FontWeight.w600)))),
+                      Expanded(child: Divider(color: Color(0xFFE0E4ED))),
+                    ]),
+                    const SizedBox(height: 12),
+                    fields,
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              const Row(children: [
-                SizedBox(width: 23, child: Divider(color: Color(0xFFD5DAE5))),
-                Expanded(child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: Text('or sign in with email',
-                    maxLines: 2, softWrap: true,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: slate, fontSize: 12,
-                      fontWeight: FontWeight.w600)))),
-                SizedBox(width: 23, child: Divider(color: Color(0xFFD5DAE5))),
-              ]),
-              const SizedBox(height: 21),
-              fields,
             ],
           ),
         ),
@@ -962,8 +975,11 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
              :SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: isAuth
-                ? EdgeInsets.fromLTRB(width<650?24:28, width<650?22:36,
-                    width<650?24:28, 28+MediaQuery.viewInsetsOf(context).bottom)
+                ? EdgeInsets.fromLTRB(
+                    width<650 && page=='Sign In' ? 12 : width<650 ? 24 : 28,
+                    width<650 && page=='Sign In' ? 12 : width<650 ? 22 : 36,
+                    width<650 && page=='Sign In' ? 12 : width<650 ? 24 : 28,
+                    24+MediaQuery.viewInsetsOf(context).bottom)
                 : EdgeInsets.all(width<520?15:25),
               child:Center(child:ConstrainedBox(
                 constraints:const BoxConstraints(maxWidth:1050),
