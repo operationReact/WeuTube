@@ -339,7 +339,7 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
   }) {
     final secret = isPassword && !showPassword;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
+      padding: EdgeInsets.only(bottom: page == 'Sign In' ? 10 : 15),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label, style: const TextStyle(
           color: navy, fontSize: 13, fontWeight: FontWeight.w700)),
@@ -390,8 +390,8 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
             filled: true,
             fillColor: const Color(0xFFFAFBFD),
             isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 15, vertical: 15),
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 15, vertical: page == 'Sign In' ? 13 : 15),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
               borderSide: const BorderSide(color: Color(0xFFDCE2EC))),
