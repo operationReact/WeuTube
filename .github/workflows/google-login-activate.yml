@@ -107,7 +107,13 @@ jobs:
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
           terraform validate
+          # Scope the apply to Google federation only: unrelated pending
+          # production infrastructure changes must not block login activation
+          # and must never be applied implicitly by this workflow.
           terraform plan -input=false -out=google-signin.tfplan \
+            -target='aws_cognito_identity_provider.google[0]' \
+            -target='aws_cognito_user_pool_client.weutube[0]' \
+            -target='aws_cognito_user_pool_domain.login[0]' \
             -var='enable_api=true' \
             -var='enable_google_login=true' \
             -var='api_hosted_zone_id=' \
@@ -128,6 +134,10 @@ jobs:
               end)
           ' google-signin-plan.json >/dev/null || {
             echo "::error::Unrelated or unsafe production changes found; refusing Terraform apply."
+            # Resource addresses/actions are safe diagnostics; never print
+            # Terraform plan attribute values or any OAuth secret.
+            jq -r '.resource_changes[]? | select(.mode == "managed") |
+              "\(.address): \(.change.actions | join(","))"' google-signin-plan.json
             exit 1
           }
           # Never print Terraform state, IdP secret, JSON plan or credentials.
