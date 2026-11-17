@@ -50,9 +50,21 @@ jobs:
           # Read optional outputs from machine-readable JSON: missing state
           # outputs may print warnings and break GITHUB_ENV if parsed as raw text.
           all_outputs="$(terraform output -json)"
-          google_enabled="$(printf '%s' "$all_outputs" | jq -r '.google_login_enabled.value // false')"
           cognito_domain="$(printf '%s' "$all_outputs" | jq -r '.cognito_login_domain.value // ""')"
-          test "$google_enabled" = true || test "$google_enabled" = false
+          # Terraform's output for variable-only google_login_enabled can be
+          # stale after resource-targeted apply. Read live Cognito instead.
+          pool_id="$(printf '%s' "$all_outputs" | jq -r '.cognito_user_pool_id.value')"
+          client_id="$(printf '%s' "$all_outputs" | jq -r '.cognito_client_id.value')"
+          provider_names="$(aws cognito-idp list-identity-providers \
+            --region ap-south-1 --user-pool-id "$pool_id" --output json)"
+          client_details="$(aws cognito-idp describe-user-pool-client \
+            --region ap-south-1 --user-pool-id "$pool_id" --client-id "$client_id" --output json)"
+          google_enabled=false
+          if printf '%s' "$provider_names" | jq -e '[.Providers[]? | select(.ProviderName == "Google")] | length == 1' >/dev/null &&
+             printf '%s' "$client_details" | jq -e '(.UserPoolClient.SupportedIdentityProviders // []) | index("Google") != null' >/dev/null; then
+            google_enabled=true
+          fi
+          echo "Google Cognito provider and client enabled: $google_enabled"
           if [ -n "$cognito_domain" ]; then
             [[ "$cognito_domain" =~ ^https://[a-z0-9.-]+\.amazoncognito\.com$ ]]
           fi
