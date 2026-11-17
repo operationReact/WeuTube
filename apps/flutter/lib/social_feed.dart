@@ -122,13 +122,20 @@ class _SocialHubState extends State<SocialHub> {
         homeIndex = 0;
       });
       if(widget.api.signedIn) {
-        final state = await widget.api.socialState();
-        if(!mounted) return;
-        setState(() {
-          liked.addAll((state['likedVideoIds'] as List<dynamic>? ?? []).map(str));
-          saved.addAll((state['savedVideoIds'] as List<dynamic>? ?? []).map(str));
-          following.addAll((state['followingCreatorIds'] as List<dynamic>? ?? []).map(str));
-        });
+        try {
+          final state = await widget.api.socialState();
+          if(!mounted) return;
+          setState(() {
+            liked.addAll((state['likedVideoIds'] as List<dynamic>? ?? []).map(str));
+            saved.addAll((state['savedVideoIds'] as List<dynamic>? ?? []).map(str));
+            following.addAll((state['followingCreatorIds'] as List<dynamic>? ?? []).map(str));
+          });
+        } catch (_) {
+          // A user's reaction-state request must never hide already loaded
+          // public YouTube videos or falsely trigger demo-mode fallback.
+          if(mounted) setState(() =>
+            loadError = 'Personal reactions unavailable; videos are still live.');
+        }
       }
     } catch(_) {
       if(mounted) setState(() {
