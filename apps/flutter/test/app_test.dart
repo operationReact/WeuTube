@@ -114,6 +114,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Immersive sign-in fits responsive hero and keeps Google secondary',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const WeuTubeApp());
+    await tester.tap(find.text('Create').last);
+    await tester.pump();
+    await tester.ensureVisible(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    final hero = find.byKey(const ValueKey('immersive-brand-hero'));
+    expect(hero, findsOneWidget);
+    expect(tester.getSize(hero).height, lessThanOrEqualTo(254));
+    expect(find.byType(WeuTubeBrand), findsOneWidget);
+    final google = find.byKey(const ValueKey('google-sign-in-button'));
+    expect(google, findsOneWidget);
+    expect(tester.widget(google), isA<OutlinedButton>());
+    expect(find.widgetWithText(FilledButton, 'Sign In'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Compact immersive brand hero has 202dp height',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: ImmersiveBrandHero(compact: true)),
+    ));
+    expect(tester.getSize(find.byKey(const ValueKey('immersive-brand-hero'))).height,
+      202);
+    expect(find.byType(WeuTubeBrand), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Immersive hero stops motion when user prefers reduced animation',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: MediaQuery(
+        data: MediaQueryData(disableAnimations: true),
+        child: ImmersiveBrandHero(compact: true),
+      )),
+    ));
+    expect(find.byType(WeuTubeBrand), findsOneWidget);
+    expect(find.byKey(const ValueKey('immersive-brand-hero')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('immersive-brand-hero')));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Compact 320dp sign-in remains scrollable without overflow',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 700));
