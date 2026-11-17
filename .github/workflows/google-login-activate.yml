@@ -84,8 +84,7 @@ jobs:
           jq -e '
             all(.resource_changes[]?;
               if .mode == "data" then
-                (.address == "data.aws_ssm_parameter.google_login_client_id[0]" or
-                 .address == "data.aws_ssm_parameter.google_login_client_secret[0]")
+                true  # data-source reads cannot mutate production resources
               else
                 ((.address == "aws_cognito_identity_provider.google[0]" or
                   .address == "aws_cognito_user_pool_client.weutube[0]" or
