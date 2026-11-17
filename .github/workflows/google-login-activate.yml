@@ -127,10 +127,13 @@ jobs:
               if .mode == "data" then
                 true  # data-source reads cannot mutate production resources
               else
+                # Terraform includes unchanged dependencies of the three
+                # targeted Cognito resources. A no-op mutates nothing.
+                (.change.actions == ["no-op"]) or
                 ((.address == "aws_cognito_identity_provider.google[0]" or
                   .address == "aws_cognito_user_pool_client.weutube[0]" or
                   .address == "aws_cognito_user_pool_domain.login[0]") and
-                 all(.change.actions[]; . == "create" or . == "update" or . == "no-op"))
+                 all(.change.actions[]; . == "create" or . == "update"))
               end)
           ' google-signin-plan.json >/dev/null || {
             echo "::error::Unrelated or unsafe production changes found; refusing Terraform apply."
