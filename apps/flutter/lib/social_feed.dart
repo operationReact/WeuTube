@@ -177,7 +177,13 @@ class _SocialHubState extends State<SocialHub> {
   Future<void> follow(Map<String, dynamic> item) async {
     if(isImported(item)) {
       final channel=str(item['creatorId']);
-      if(RegExp(r'^[A-Za-z0-9_-]{1,128}
+      if(RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(channel)) {
+        await launchUrl(Uri.parse('https://www.youtube.com/channel/$channel'),
+          mode:LaunchMode.externalApplication);
+      }
+      return;
+    }
+    final key = str(item['creatorId']).isNotEmpty ?
       str(item['creatorId']) : str(item['creator']);
     final already = following.contains(key);
     if(!isDemo(item) && !widget.api.signedIn) {widget.onSignIn();return;}
