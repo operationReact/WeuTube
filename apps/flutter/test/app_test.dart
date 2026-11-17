@@ -7,10 +7,11 @@ import 'package:weutube/backend_client.dart';
 import 'package:weutube/product_ui.dart' show WeuTubeBrand;
 
 void main() {
-  testWidgets('opens social Home directly with a populated feed', (tester) async {
+  testWidgets('opens public Home without inventing creators', (tester) async {
     await tester.pumpWidget(const WeuTubeApp());
     expect(find.byType(WeuTubeBrand), findsOneWidget);
-    expect(find.text('Discover creators'), findsOneWidget);
+    // No discovery strip until real imported videos supply creator profiles.
+    expect(find.text('Discover creators'), findsNothing);
     expect(find.byTooltip('Search creators and videos'), findsOneWidget);
     expect(find.text('Your video'), findsNothing);
     expect(find.text('Latest'), findsOneWidget);

@@ -88,7 +88,8 @@ public class SocialFeedController {
       view_count,like_count,comment_count
     FROM youtube_public_channel_catalog
     WHERE (NOT ? OR short_candidate)
-      AND last_seen_at >= now() - interval '2 hours'
+    -- Keep last verified public uploads visible during temporary sync outages.
+    -- A fully successful channel rescan removes private/deleted videos.
     ORDER BY published_at DESC,youtube_video_id DESC LIMIT ?
     """,(rs,i)->{
      String yt=rs.getString(1),name=rs.getString(3);

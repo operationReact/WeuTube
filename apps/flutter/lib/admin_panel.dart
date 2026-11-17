@@ -14,6 +14,7 @@ class _WeuTubeAdminPanelState extends State<WeuTubeAdminPanel> {
   String section='Reviews',error='',message='';
   bool loading=false;
   List<Map<String,dynamic>> rows=[];
+  Map<String,dynamic> catalogState={};
   final reason=TextEditingController();
   final grantSub=TextEditingController();
   final grantChannel=TextEditingController();
@@ -35,7 +36,17 @@ class _WeuTubeAdminPanelState extends State<WeuTubeAdminPanel> {
       'Channels'=>await widget.api.adminChannels(),
       _=>await widget.api.payoutQueue(),
     };
-    if(mounted)setState(()=>rows=result);
+    Map<String,dynamic> feedState={};
+    if(section=='Channels') {
+      try {feedState=await widget.api.publicFeed();}
+      catch (_) {
+        // Channel management must remain available if discovery is offline.
+      }
+    }
+    if(mounted)setState(() {
+      rows=result;
+      if(section=='Channels')catalogState=feedState;
+    });
   });
   Future<void> switchTo(String next) async {setState(()=>section=next);await load();}
   void toast(String text){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
@@ -173,6 +184,19 @@ class _WeuTubeAdminPanelState extends State<WeuTubeAdminPanel> {
             fontWeight:FontWeight.w800,color:navy)),
           const SizedBox(height:12),
           button('Connect with Google',connect),
+          const SizedBox(height:12),
+          if(catalogState.isNotEmpty) ...[
+            Text('Connected channels: ${catalogState['connectedChannels'] ?? '—'}',
+              style:const TextStyle(color:navy,fontWeight:FontWeight.w700)),
+            Text('Imported public videos: ${catalogState['importedVideos'] ?? '—'}',
+              style:const TextStyle(color:slate)),
+            Text('Video import: ${catalogState['channelSyncStatus'] ?? 'UNKNOWN'}',
+              style:const TextStyle(color:slate)),
+            const SizedBox(height:12),
+          ],
+          const Text('Google API credentials alone do not connect a YouTube '
+            'channel. Connection requires completed Google authorization.',
+            style:TextStyle(color:slate,fontSize:12)),
           const SizedBox(height:12),
           input('Connected Channel ID',grantChannel),
           input('Creator Cognito Subject',grantSub),
