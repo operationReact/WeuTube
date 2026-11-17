@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weutube/main.dart';
 import 'package:weutube/immersive_sign_in.dart';
@@ -127,7 +128,11 @@ void main() {
     expect(tester.takeException(), isNull, reason: 'Create route at 320dp');
     await tester.tap(find.text('Sign in to upload'));
     await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull, reason: 'Initial sign-in at 320dp');
+    final initialError = tester.takeException();
+    if (initialError != null) {
+      debugDumpRenderTree();
+    }
+    expect(initialError, isNull, reason: 'Initial sign-in at 320dp');
     await tester.ensureVisible(find.text('Sign In').last);
     await tester.pumpAndSettle();
     expect(find.text('Sign In'), findsWidgets);
