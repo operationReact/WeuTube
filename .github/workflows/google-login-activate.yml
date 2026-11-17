@@ -25,6 +25,39 @@ jobs:
         with:
           role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
           aws-region: ap-south-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.0'
+      - name: Bootstrap only the two Google-login SSM read permissions
+        working-directory: infra/terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+          # First phase never needs the Google client ID or secret to exist.
+          terraform init -input=false \
+            -backend-config="bucket=weutube-prod-tfstate-098859530205" \
+            -backend-config="key=weutube/prod/terraform.tfstate" \
+            -backend-config="region=ap-south-1" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          terraform validate
+          terraform plan -input=false \
+            -target='aws_iam_role_policy.google_login_parameter_reader[0]' \
+            -out=google-iam-only.tfplan \
+            -var='enable_api=true' \
+            -var='api_hosted_zone_id=' \
+            -var='github_oidc_provider_arn=arn:aws:iam::098859530205:oidc-provider/token.actions.githubusercontent.com' \
+            >/dev/null
+          terraform show -json google-iam-only.tfplan > google-iam-only.json
+          jq -e 'all(.resource_changes[]? | select(.mode == "managed");
+              .address == "aws_iam_role_policy.google_login_parameter_reader[0]" and
+              all(.change.actions[]; . == "create" or . == "update" or . == "no-op"))' \
+            google-iam-only.json >/dev/null || {
+              echo "::error::Refusing unexpected IAM changes"
+              exit 1
+            }
+          terraform apply -input=false -auto-approve google-iam-only.tfplan >/dev/null
+          echo "Project-scoped role now has read-only access to two Google login parameters."
       - name: Check separate Google login credentials without printing their values
         id: credentials
         shell: bash
@@ -36,10 +69,16 @@ jobs:
             # Failure can mean a missing SecureString or insufficient IAM access.
             if aws ssm get-parameter --region ap-south-1 --with-decryption \
               --name "/weutube/prod/google-login/$param" \
-              --query 'Parameter.Name' --output text >/dev/null 2>&1; then
+              --query 'Parameter.Name' --output text >/dev/null 2>/tmp/weutube-google-ssm-error; then
               echo "Google login $param: accessible"
             else
-              echo "::warning::Google login $param: missing or IAM access denied"
+              if grep -q 'ParameterNotFound' /tmp/weutube-google-ssm-error; then
+                echo "::warning::Google login $param: SecureString does not exist"
+              elif grep -Eq 'AccessDenied|KMSAccessDenied' /tmp/weutube-google-ssm-error; then
+                echo "::warning::Google login $param: IAM/KMS decryption denied"
+              else
+                echo "::warning::Google login $param: could not verify SSM access"
+              fi
               available=false
             fi
           done
@@ -55,10 +94,6 @@ jobs:
               echo "Once available, rerun this workflow from GitHub Actions."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: hashicorp/setup-terraform@v3
-        if: steps.credentials.outputs.available == 'true'
-        with:
-          terraform_version: '1.14.0'
       - name: Plan and apply only safe Cognito Google sign-in changes
         if: steps.credentials.outputs.available == 'true'
         working-directory: infra/terraform

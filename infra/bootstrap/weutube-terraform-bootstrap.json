@@ -263,7 +263,9 @@
               "Resource": [
                 "arn:aws:ssm:ap-south-1:098859530205:parameter/weutube/prod/youtube/client-id",
                 "arn:aws:ssm:ap-south-1:098859530205:parameter/weutube/prod/youtube/client-secret",
-                "arn:aws:ssm:ap-south-1:098859530205:parameter/weutube/prod/youtube/token-key-base64"
+                "arn:aws:ssm:ap-south-1:098859530205:parameter/weutube/prod/youtube/token-key-base64",
+                "arn:aws:ssm:ap-south-1:098859530205:parameter/weutube/prod/google-login/client-id",
+                "arn:aws:ssm:ap-south-1:098859530205:parameter/weutube/prod/google-login/client-secret"
               ]
             }
           ]
