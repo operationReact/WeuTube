@@ -52,6 +52,15 @@ class SocialFeedControllerTest {
   assertEquals(0,result.connectedChannels());
   assertTrue(result.items().isEmpty());
  }
+ @Test void previouslyVerifiedChannelVideosAreNotHiddenBySyncAge() {
+  when(jdbc.query(anyString(),any(RowMapper.class),eq(40))).thenReturn(List.of());
+  when(jdbc.query(anyString(),any(RowMapper.class),eq(false),eq(40))).thenReturn(List.of());
+  controller.feed("","All",40,false);
+  verify(jdbc).query(argThat((String sql) ->
+    sql.contains("FROM youtube_public_channel_catalog") &&
+    !sql.contains("last_seen_at >= now()")),
+    any(RowMapper.class),eq(false),eq(40));
+ }
  @Test void shortsEndpointDoesNotIncludeDemoFixtures() {
   when(jdbc.query(anyString(),any(RowMapper.class),eq(true),eq(40))).thenReturn(List.of());
   when(jdbc.query(anyString(),any(RowMapper.class),eq(40))).thenReturn(List.of());
