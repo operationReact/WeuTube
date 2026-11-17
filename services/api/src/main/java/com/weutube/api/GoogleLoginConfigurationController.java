@@ -20,9 +20,9 @@ public class GoogleLoginConfigurationController {
  private final String clientId;
 
  public GoogleLoginConfigurationController(
-    @Value("\${weutube.cognito.google-enabled:false}") boolean enabled,
-    @Value("\${weutube.cognito.hosted-ui-domain:}") String hostedUiDomain,
-    @Value("\${weutube.cognito.client-id:}") String clientId) {
+    @Value("${weutube.cognito.google-enabled:false}") boolean enabled,
+    @Value("${weutube.cognito.hosted-ui-domain:}") String hostedUiDomain,
+    @Value("${weutube.cognito.client-id:}") String clientId) {
   this.enabled=enabled;
   this.hostedUiDomain=hostedUiDomain;
   this.clientId=clientId;
