@@ -14,6 +14,19 @@ import 'package:http_parser/http_parser.dart' show MediaType;
 const apiOrigin = String.fromEnvironment('WEUTUBE_API_ORIGIN',
   defaultValue: 'https://api.weutube.com');
 
+/// A popup callback must share the initiating page's web origin. Only the
+/// two official WeuTube hosts may override the API's configured redirect.
+String googleWebCallbackForOrigin(String configured, Uri origin, {
+  required bool isWeb,
+}) {
+  if (!isWeb) return configured;
+  if (origin.scheme != 'https' ||
+      (origin.host != 'weutube.com' && origin.host != 'www.weutube.com')) {
+    return configured;
+  }
+  return '${origin.origin}/auth.html';
+}
+
 class ApiFailure implements Exception {
   final String message;
   final int? code;
@@ -120,8 +133,13 @@ class WeuTubeApi {
     }
     final domain = config['hostedUiDomain']?.toString() ?? '';
     final clientId = config['clientId']?.toString() ?? '';
+    // The OAuth popup must return to exactly the same web origin that
+    // opened it. A www -> apex mismatch makes postMessage fail silently.
+    final configuredWebRedirect = config['webRedirectUri']?.toString() ?? '';
+    final webRedirect = googleWebCallbackForOrigin(
+      configuredWebRedirect, Uri.base, isWeb: kIsWeb);
     final redirect = kIsWeb
-      ? config['webRedirectUri']?.toString() ?? ''
+      ? webRedirect
       : config['nativeRedirectUri']?.toString() ?? '';
     final base = Uri.tryParse(domain);
     final redirectUri = Uri.tryParse(redirect);

@@ -1,0 +1,119 @@
+name: WeuTube - activate Google sign-in when credentials are available
+# Safe automation: only the Cognito user-login domain/client/Google IdP may be changed.
+# If the independent Google Cloud OAuth credentials are missing, report the
+# blocker and leave all production resources unchanged.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/google-login-activate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+  actions: write
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: weutube-terraform-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assume existing production Terraform role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+      - name: Check separate Google login credentials without printing their values
+        id: credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "098859530205"
+          available=true
+          for param in client-id client-secret; do
+            # Failure can mean a missing SecureString or insufficient IAM access.
+            if aws ssm get-parameter --region ap-south-1 --with-decryption \
+              --name "/weutube/prod/google-login/$param" \
+              --query 'Parameter.Name' --output text >/dev/null 2>&1; then
+              echo "Google login $param: accessible"
+            else
+              echo "::warning::Google login $param: missing or IAM access denied"
+              available=false
+            fi
+          done
+          echo "available=$available" >> "$GITHUB_OUTPUT"
+          if [ "$available" != true ]; then
+            {
+              echo "## Google sign-in cannot yet be activated"
+              echo "Add two independent Google Cloud OAuth Web client values as SSM SecureStrings:"
+              echo "- /weutube/prod/google-login/client-id"
+              echo "- /weutube/prod/google-login/client-secret"
+              echo "Verify the Terraform IAM role can decrypt both parameters."
+              echo "Do not reuse the YouTube publishing-channel OAuth credentials."
+              echo "Once available, rerun this workflow from GitHub Actions."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: hashicorp/setup-terraform@v3
+        if: steps.credentials.outputs.available == 'true'
+        with:
+          terraform_version: '1.14.0'
+      - name: Plan and apply only safe Cognito Google sign-in changes
+        if: steps.credentials.outputs.available == 'true'
+        working-directory: infra/terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform init -input=false \
+            -backend-config="bucket=weutube-prod-tfstate-098859530205" \
+            -backend-config="key=weutube/prod/terraform.tfstate" \
+            -backend-config="region=ap-south-1" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          terraform validate
+          terraform plan -input=false -out=google-signin.tfplan \
+            -var='enable_api=true' \
+            -var='enable_google_login=true' \
+            -var='api_hosted_zone_id=' \
+            -var='github_oidc_provider_arn=arn:aws:iam::098859530205:oidc-provider/token.actions.githubusercontent.com' \
+            >/dev/null
+          terraform show -json google-signin.tfplan > google-signin-plan.json
+          # Data-source refresh is allowed. Managed changes must be confined to
+          # exactly these Cognito login resources, never deletions/replacements.
+          jq -e '
+            all(.resource_changes[]?;
+              if .mode == "data" then
+                true  # data-source reads cannot mutate production resources
+              else
+                ((.address == "aws_cognito_identity_provider.google[0]" or
+                  .address == "aws_cognito_user_pool_client.weutube[0]" or
+                  .address == "aws_cognito_user_pool_domain.login[0]") and
+                 all(.change.actions[]; . == "create" or . == "update" or . == "no-op"))
+              end)
+          ' google-signin-plan.json >/dev/null || {
+            echo "::error::Unrelated or unsafe production changes found; refusing Terraform apply."
+            exit 1
+          }
+          # Never print Terraform state, IdP secret, JSON plan or credentials.
+          terraform apply -input=false -auto-approve google-signin.tfplan >/dev/null
+          tf_outputs="$(terraform output -json)"
+          echo "$tf_outputs" | jq -e '.google_login_enabled.value == true and
+            (.cognito_login_domain.value | startswith("https://"))' >/dev/null
+          echo "Cognito Google federation and login domain applied from a restricted plan."
+      - name: Dispatch existing production release with refreshed auth settings
+        if: steps.credentials.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run deploy-api.yml --ref main
+          {
+            echo "## Cognito Google sign-in provisioned"
+            echo "Restricted Terraform apply succeeded."
+            echo "Dispatched the existing API/web production deployment to read new outputs."
+            echo "Google Console must allow this redirect:"
+            echo "https://weutube-prod-login-098859530205.auth.ap-south-1.amazoncognito.com/oauth2/idpresponse"
+            echo "Confirm the web and Android Google account-picker flows with a real test account."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -27,18 +27,48 @@ ordinary WeuTube viewers into Cognito.
 3. Store its client ID and client secret as AWS SSM **SecureString** values:
    `/weutube/prod/google-login/client-id` and
    `/weutube/prod/google-login/client-secret`.
-4. After reviewing Terraform, run the existing **production Terraform apply**
-   with `-var='enable_google_login=true'`. The default is deliberately
-   `false` so an unconfigured login integration cannot break deployments.
-   The Terraform operator must have decrypt access to those two parameters.
-   Google credentials become sensitive Terraform state values; restrict and
-   encrypt the existing production state and never print plan/state contents.
-5. Deploy the updated API and web build through the existing production
-   deployment workflow. The CI deployment reads Terraform outputs
-   `google_login_enabled` and `cognito_login_domain`, and passes them
-   through private EC2 app configuration. Check the public config:
+4. The `WeuTube - activate Google sign-in when credentials are available`
+   GitHub Actions workflow checks whether both SSM SecureStrings are accessible.
+   When both are present, it prepares a Terraform plan with
+   `enable_google_login=true`, **rejects any unrelated managed infrastructure
+   changes**, and applies only the Cognito Google IdP, login domain, and
+   existing app-client configuration. This uses the existing encrypted,
+   locked production Terraform state and the existing GitHub OIDC role.
+   If credentials are absent or inaccessible, it makes **no production
+   changes** and prints only a safe non-secret readiness summary.
+5. On a successful restricted apply, the workflow dispatches
+   `deploy-api.yml`, which sets
+   `WEUTUBE_GOOGLE_LOGIN_ENABLED` and the Cognito login domain on the
+   Spring Boot server. It then verifies the public discovery endpoint:
    `https://api.weutube.com/api/public/auth/google-config`.
-   Until it returns `enabled: true`, **Google sign-in is not live**.
+6. Real Google single-tap sign-in still requires an authorized Google
+   OAuth consent screen and a permitted test/production Google account.
+   Check Google Cloud Console configuration and complete the **on-device**
+   round trip before advertising it as live. Only a real account selection
+   can prove provider consent and the code-to-token exchange.
+
+### Exact Google Console configuration
+- OAuth application type: **Web application** for Cognito's Google IdP.
+- Authorized redirect URI:
+  `https://weutube-prod-login-098859530205.auth.ap-south-1.amazoncognito.com/oauth2/idpresponse`
+- The Google Cloud OAuth consent screen must contain the correct support
+  email, app identity, authorized domains and publishing/test-user status.
+- Create SSM values in **ap-south-1**, as type **SecureString**. Never paste
+  the Google client secret into GitHub issues, chat logs, a Flutter build,
+  Terraform variable files or public endpoints.
+- The workflow can be rerun from
+  `Actions > WeuTube - activate Google sign-in when credentials are available > Run workflow`.
+
+### Safety
+- The separate YouTube publishing-channel OAuth configuration does not
+  satisfy Google **viewer/creator login** requirements.
+- Google IdP client secret will be in the encrypted Terraform state,
+  as required by the Cognito identity-provider resource; restrict
+  Terraform state read permissions.
+- Google and email/password accounts using the same email may be distinct
+  Cognito identities; **never silently merge accounts based on an
+  unverified email address**. Use an explicit identity-linking process
+  if existing password accounts need to be joined.
 
 ## Callback settings
 - Android and iOS: `weutube://auth-callback`, registered by
