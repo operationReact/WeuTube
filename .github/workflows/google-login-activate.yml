@@ -150,18 +150,15 @@ jobs:
                 >google-signin-apply.log 2>&1; then
             echo "Scoped Cognito Terraform apply completed."
           else
-            python3 - <<'PY'
-            import re
-            from pathlib import Path
-            output = Path("google-signin-apply.log").read_text(errors="replace")
-            types = sorted(set(re.findall(
-                r"\b(?:[A-Za-z]{3,60}Exception|[A-Za-z]{3,60}Error)\b", output)))
-            resources = sorted(set(re.findall(
-                r"aws_cognito_(?:identity_provider|user_pool_client|user_pool_domain)\.[A-Za-z0-9_]+\[[0-9]+\]", output)))
-            print("::error::Google Cognito Terraform apply failed.")
-            print("AWS error classes: " + (", ".join(types) or "not reported"))
-            print("Cognito resources: " + (", ".join(resources) or "not reported"))
-            PY
+            echo "::error::Google Cognito Terraform apply failed."
+            printf 'AWS error types: '
+            (grep -oE '[A-Za-z]{3,60}(Exception|Error)' google-signin-apply.log |
+              sort -u | tr '\n' ' ') || true
+            echo
+            printf 'Affected Cognito resources: '
+            (grep -oE 'aws_cognito_(identity_provider|user_pool_client|user_pool_domain)\.[A-Za-z0-9_]+\[[0-9]+\]' google-signin-apply.log |
+              sort -u | tr '\n' ' ') || true
+            echo
             exit 1
           fi
           tf_outputs="$(terraform output -json)"
