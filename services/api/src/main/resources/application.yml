@@ -34,6 +34,7 @@ management:
 # /weutube/prod/youtube/client-secret -> WEUTUBE_YOUTUBE_CLIENT_SECRET
 # Never place OAuth credentials in source control.
 weutube:
+  release-sha: ${WEUTUBE_RELEASE_SHA:unversioned}
   cognito:
     region: ${WEUTUBE_COGNITO_REGION:ap-south-1}
     client-id: ${WEUTUBE_COGNITO_CLIENT_ID:}
