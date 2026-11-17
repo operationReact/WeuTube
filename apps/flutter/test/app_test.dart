@@ -166,8 +166,9 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body:
       WeuTubeUploadComposer(api: api, onSignIn: () {}, onViewVideos: () {}))));
     await tester.pumpAndSettle();
-    expect(find.text('Channel permission needed'), findsOneWidget);
+    expect(find.text('Upload access unavailable'), findsOneWidget);
     expect(find.text('Refresh channel status'), findsOneWidget);
+    expect(find.text('App revision: unversioned'), findsOneWidget);
     expect(find.byKey(const ValueKey('upload-video-title')), findsNothing);
     expect(find.text('Upload privately for review'), findsNothing);
     api.dispose();
@@ -185,14 +186,25 @@ void main() {
     api.dispose();
   });
 
+  testWidgets('READY session with no listed channel retries secure activation',
+      (tester) async {
+    final api = _ComposerFakeApi([], autoActivate: true, readyButEmpty: true);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      WeuTubeUploadComposer(api: api, onSignIn: () {}, onViewVideos: () {}))));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('upload-video-title')), findsOneWidget);
+    expect(find.text('Authorized YouTube channel'), findsOneWidget);
+    api.dispose();
+  });
+
   testWidgets('Disconnected channel is distinct from a missing grant',
       (tester) async {
     final api = _ComposerFakeApi([], disconnected: true);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body:
       WeuTubeUploadComposer(api: api, onSignIn: () {}, onViewVideos: () {}))));
     await tester.pumpAndSettle();
-    expect(find.text('YouTube channel disconnected'), findsOneWidget);
-    expect(find.textContaining('already has permission'), findsOneWidget);
+    expect(find.text('YouTube channel setup pending'), findsOneWidget);
+    expect(find.textContaining('platform YouTube channel'), findsOneWidget);
     expect(find.byKey(const ValueKey('upload-video-title')), findsNothing);
     api.dispose();
   });
@@ -245,7 +257,7 @@ void main() {
 class _ComposerFakeApi extends WeuTubeApi {
   _ComposerFakeApi(this.channels, {this.denied = false,
       this.channelDenied = false, this.disconnected = false,
-      this.autoActivate = false}) {
+      this.autoActivate = false, this.readyButEmpty = false}) {
     accessToken = 'test-token';
   }
   final List<Map<String,dynamic>> channels;
@@ -253,9 +265,12 @@ class _ComposerFakeApi extends WeuTubeApi {
   final bool channelDenied;
   final bool disconnected;
   final bool autoActivate;
+  final bool readyButEmpty;
   @override
   Future<Map<String,dynamic>> activateCreatorChannel() async {
-    if (!autoActivate) throw const ApiFailure('No platform upload channel is available.', 403);
+    if (!autoActivate) throw ApiFailure(
+      disconnected ? 'No connected channel' : 'Creator access not enabled',
+      disconnected ? 503 : 403);
     channels.add({'channelId':'UC_Example_123','displayName':'WeuTube upload channel'});
     return channels.first;
   }
@@ -265,6 +280,7 @@ class _ComposerFakeApi extends WeuTubeApi {
     return {
       'authenticated': true,
       'uploadAccess': disconnected ? 'CHANNEL_NOT_CONNECTED' :
+        readyButEmpty ? 'READY' :
         channels.isEmpty ? 'NO_CHANNEL_GRANT' : 'READY',
       'channelGranted': disconnected || channels.isNotEmpty,
       'channelConnected': !disconnected && channels.isNotEmpty,
