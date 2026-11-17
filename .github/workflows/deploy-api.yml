@@ -54,7 +54,7 @@ jobs:
           cognito_domain="$(printf '%s' "$all_outputs" | jq -r '.cognito_login_domain.value // ""')"
           test "$google_enabled" = true || test "$google_enabled" = false
           if [ -n "$cognito_domain" ]; then
-            [[ "$cognito_domain" =~ ^https://[a-z0-9.-]+\\.amazoncognito\\.com$ ]]
+            [[ "$cognito_domain" =~ ^https://[a-z0-9.-]+\.amazoncognito\.com$ ]]
           fi
           printf 'GOOGLE_ENABLED=%s\n' "$google_enabled" >> "$GITHUB_ENV"
           printf 'COGNITO_LOGIN_DOMAIN=%s\n' "$cognito_domain" >> "$GITHUB_ENV"
