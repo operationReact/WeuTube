@@ -42,6 +42,8 @@ void main() {
     expect(find.text('Welcome Back'), findsOneWidget);
     expect(find.text('Email Address'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
+    await tester.ensureVisible(find.text('New to WeuTube? Create Account'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('New to WeuTube? Create Account'));
     await tester.pumpAndSettle();
     expect(find.text('Full Name'), findsOneWidget);
@@ -79,6 +81,8 @@ void main() {
     expect(find.byType(TextFormField), findsNWidgets(2));
     expect(find.byType(AutofillGroup), findsOneWidget);
     expect(find.text('Welcome Back'), findsOneWidget);
+    await tester.ensureVisible(find.text('New to WeuTube? Create Account'));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('New to WeuTube? Create Account'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('New to WeuTube? Create Account'));
@@ -135,6 +139,8 @@ void main() {
     await tester.ensureVisible(find.text('Sign in to upload'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sign in to upload'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('New to WeuTube? Create Account'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('New to WeuTube? Create Account'));
     await tester.pumpAndSettle();
