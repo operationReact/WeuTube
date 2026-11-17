@@ -149,41 +149,49 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
       identityVerified = true;
       if(!mounted) return;
       final access = session['uploadAccess']?.toString();
-      if(access == 'CHANNEL_NOT_CONNECTED') {
-        setState(() {
-          _access = UploadAccess.noChannel;
-          _channelAccessReason = access;
-        });
-        return;
-      }
-      if(access == 'NO_CHANNEL_GRANT') {
-        // A server-owned, private-review channel can be activated only when
-        // the operator has opted in, exactly one OAuth channel is connected,
-        // and this creator has not been explicitly blocked by an admin.
-        // Failure is a channel-access state, not a broken Cognito sign-in.
+      // The channel listing is the definitive source for the upload form.
+      // A session can report READY even if an old/inconsistent grant is not
+      // returned by the listing. Always try safe onboarding once when empty.
+      var granted = await widget.api.grantedChannels();
+      if (!mounted) return;
+      var channels = granted.where((c) =>
+          (c['channelId']?.toString() ?? '').isNotEmpty).toList();
+      if (channels.isEmpty) {
         try {
+          // This call is allowed only for a single operator-connected OAuth
+          // channel; backend revocation and consent checks remain authoritative.
           await widget.api.activateCreatorChannel();
+          granted = await widget.api.grantedChannels();
+          if (!mounted) return;
+          channels = granted.where((c) =>
+              (c['channelId']?.toString() ?? '').isNotEmpty).toList();
         } on ApiFailure catch (failure) {
           if (!mounted) return;
           setState(() {
-            _access = UploadAccess.noChannel;
-            _channelAccessReason = failure.code == 503
-              ? 'CHANNEL_SETUP_REQUIRED'
-              : 'NO_CHANNEL_GRANT';
+            _access = failure.code == 401 ? UploadAccess.denied
+              : failure.code == 403 || failure.code == 409 ||
+                failure.code == 503 ? UploadAccess.noChannel : UploadAccess.failed;
+            _channelAccessReason = switch (failure.code) {
+              503 => 'CHANNEL_SETUP_REQUIRED',
+              409 => 'CHANNEL_SELECTION_REQUIRED',
+              403 => 'ACCESS_DENIED',
+              _ => access == 'CHANNEL_NOT_CONNECTED'
+                ? 'CHANNEL_NOT_CONNECTED' : 'CHANNEL_ACTIVATION_FAILED',
+            };
             _error = failure.message;
           });
           return;
         }
       }
-      final granted = await widget.api.grantedChannels();
-      if (!mounted) return;
-      final channels = granted.where((c) =>
-          (c['channelId']?.toString() ?? '').isNotEmpty).toList();
       setState(() {
         _channels = channels;
         _channel = channels.isEmpty ? null : channels.first['channelId'].toString();
         _access = channels.isEmpty ? UploadAccess.noChannel : UploadAccess.ready;
-        _channelAccessReason = channels.isEmpty ? 'NO_CHANNEL_GRANT' : null;
+        _channelAccessReason = channels.isEmpty ? 'CHANNEL_INCONSISTENT' : null;
+        _error = channels.isEmpty
+          ? 'The API accepted channel activation but did not return an '
+            'authorized upload channel. This needs a backend grant check.'
+          : null;
       });
       if(channels.isNotEmpty) await _restorePending();
     } on ApiFailure catch (ex) {
@@ -389,6 +397,9 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
     widget.onSignIn();
   }
 
+  static const appRevision = String.fromEnvironment(
+    'WEUTUBE_BUILD_SHA', defaultValue: 'unversioned');
+
   Widget _blocked(String heading, String details, {
     bool canRetry = false,
     String retryLabel = 'Check channel access again',
@@ -422,6 +433,10 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
           icon: const Icon(Icons.video_library_outlined,size: 18),
           label: const Text('View My Videos'))),
     ],
+    const SizedBox(height: 12),
+    Text('App revision: ${appRevision.length > 8
+      ? appRevision.substring(0,8) : appRevision}',
+      style: const TextStyle(color: slate,fontSize: 11)),
   ]);
 
   Widget _fieldLabel(String text) => Padding(
@@ -603,16 +618,34 @@ class _WeuTubeUploadComposerState extends State<WeuTubeUploadComposer> {
               _channelAccessReason == 'CHANNEL_NOT_CONNECTED'
                 ? 'YouTube channel disconnected'
                 : _channelAccessReason == 'CHANNEL_SETUP_REQUIRED'
-                  ? 'YouTube channel setup pending' : 'Channel permission needed',
+                  ? 'YouTube channel setup pending'
+                  : _channelAccessReason == 'CHANNEL_SELECTION_REQUIRED'
+                    ? 'Channel selection needed'
+                    : _channelAccessReason == 'CHANNEL_INCONSISTENT'
+                      ? 'Channel authorization incomplete'
+                      : _channelAccessReason == 'ACCESS_DENIED'
+                        ? 'Upload access unavailable'
+                        : 'Channel permission needed',
               _channelAccessReason == 'CHANNEL_NOT_CONNECTED'
                 ? 'Your account already has permission to use a channel, '
                   'but its YouTube connection is unavailable. The channel '
                   'owner needs to reconnect it in the Admin panel. '
                   'Your sign-in is working; signing in again will not fix this.'
                 : _channelAccessReason == 'CHANNEL_SETUP_REQUIRED'
-                  ? 'The app is signed in, but the platform YouTube channel '
-                    'has not completed Google authorization. A channel '
-                    'administrator must connect it before private uploads can start.'
+                  ? 'Your login is working, but there is no connected platform '
+                    'YouTube channel ready for private uploads. An administrator '
+                    'must complete Google channel authorization.'
+                : _channelAccessReason == 'CHANNEL_SELECTION_REQUIRED'
+                  ? 'Several YouTube channels are connected. An administrator '
+                    'must choose one before automatic creator uploads can start.'
+                : _channelAccessReason == 'CHANNEL_INCONSISTENT'
+                  ? 'The server did not return a usable channel after the '
+                    'activation request. Your account is signed in; the backend '
+                    'must reconcile the channel grant.'
+                : _channelAccessReason == 'ACCESS_DENIED'
+                  ? 'Your sign-in is valid, but this server has not permitted '
+                    'automatic uploads for your account. The error below '
+                    'explains whether access is disabled or was revoked.'
                 : 'You are signed in successfully. Uploading is currently '
                   'restricted to YouTube channels authorized by a WeuTube '
                   'administrator. Ask an administrator to connect a channel '
