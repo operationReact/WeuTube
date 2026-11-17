@@ -17,6 +17,9 @@ jobs:
           channel: stable
       - run: flutter create --platforms=android,ios,web --org com.weutube .
         working-directory: apps/flutter
+      - name: Configure Google OIDC callback handlers
+        run: python3 tool/configure_google_auth.py
+        working-directory: apps/flutter
       - name: Generate approved platform branding
         working-directory: apps/flutter
         run: |
