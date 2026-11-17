@@ -29,6 +29,72 @@ void main() {
     expect(api.signedIn,isFalse);
     api.dispose();
   });
+  test('Google auth is safely unavailable until Cognito identity provider is enabled', () async {
+    final api=WeuTubeApi(client:MockClient((req) async =>
+      http.Response(jsonEncode({'enabled':false}),200)));
+    await expectLater(api.loginWithGoogle(), throwsA(isA<ApiFailure>()));
+    expect(api.signedIn, isFalse);
+    api.dispose();
+  });
+
+  test('Google auth uses state and PKCE before accepting Cognito token', () async {
+    String? expectedState;
+    final paths=<String>[];
+    final client=MockClient((req) async {
+      paths.add(req.url.path);
+      if(req.url.path.endsWith('google-config')) {
+        return http.Response(jsonEncode({
+          'enabled':true,
+          'hostedUiDomain':'https://example.auth.ap-south-1.amazoncognito.com',
+          'clientId':'public-cognito-client',
+          'nativeRedirectUri':'weutube://auth-callback',
+          'webRedirectUri':'https://weutube.com/auth.html',
+        }),200);
+      }
+      expect(req.url.path, '/oauth2/token');
+      expect(req.bodyFields['code_verifier'], isNotEmpty);
+      expect(req.bodyFields['grant_type'], 'authorization_code');
+      return http.Response(jsonEncode({
+        'access_token':'issued-google-cognito-access',
+        'id_token':'issued-google-cognito-id',
+        'refresh_token':'issued-google-cognito-refresh',
+      }),200);
+    });
+    final api=WeuTubeApi(client:client);
+    await api.loginWithGoogle(authorize:(url, scheme) async {
+      final uri=Uri.parse(url);
+      expect(uri.queryParameters['identity_provider'],'Google');
+      expect(uri.queryParameters['code_challenge_method'],'S256');
+      expect(uri.queryParameters['code_challenge'],isNotEmpty);
+      expect(uri.queryParameters['redirect_uri'],'weutube://auth-callback');
+      expectedState=uri.queryParameters['state'];
+      return 'weutube://auth-callback?code=test-code&state=$expectedState';
+    });
+    expect(api.signedIn,isTrue);
+    expect(api.accessToken,'issued-google-cognito-access');
+    expect(paths,['/api/public/auth/google-config','/oauth2/token']);
+    api.dispose();
+  });
+
+  test('Mismatched Google callback state is rejected without token exchange', () async {
+    var tokenCalls=0;
+    final api=WeuTubeApi(client:MockClient((req) async {
+      if(req.url.path.endsWith('/oauth2/token')) tokenCalls++;
+      return http.Response(jsonEncode({
+        'enabled':true,
+        'hostedUiDomain':'https://example.auth.ap-south-1.amazoncognito.com',
+        'clientId':'public-client',
+        'nativeRedirectUri':'weutube://auth-callback',
+        'webRedirectUri':'https://weutube.com/auth.html',
+      }),200);
+    }));
+    await expectLater(api.loginWithGoogle(authorize:(_,_scheme) async =>
+      'weutube://auth-callback?code=code&state=attacker'),throwsA(isA<ApiFailure>()));
+    expect(tokenCalls,0);
+    expect(api.signedIn,isFalse);
+    api.dispose();
+  });
+
   test('Registration never assumes sign-in', () async {
     final api=WeuTubeApi(client:MockClient((req) async =>
       http.Response(jsonEncode({'status':'CONFIRMATION_REQUIRED'}),200)));
