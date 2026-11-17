@@ -161,15 +161,20 @@ jobs:
             echo
             exit 1
           fi
-          tf_outputs="$(terraform output -json)"
-          if ! printf '%s' "$tf_outputs" | jq -e '.google_login_enabled.value == true and
-            (.cognito_login_domain.value | startswith("https://"))' >/dev/null; then
-            echo "::error::Cognito apply finished, but readiness outputs are not enabled."
-            printf '%s' "$tf_outputs" | jq -c '{google_enabled: (.google_login_enabled.value // false),
-              login_domain_configured: ((.cognito_login_domain.value // "") | startswith("https://"))}'
-            exit 1
-          fi
-          echo "Cognito Google federation and login domain applied from a restricted plan."
+          # A targeted Terraform apply can leave output values stale, even
+          # when Cognito mutations succeeded. Verify real AWS configuration.
+          pool_id="$(terraform output -raw cognito_user_pool_id)"
+          client_id="$(terraform output -raw cognito_client_id)"
+          login_domain="$(terraform output -raw cognito_login_domain)"
+          [[ "$login_domain" =~ ^https://[a-z0-9.-]+\.amazoncognito\.com$ ]]
+          aws cognito-idp list-identity-providers --region ap-south-1 \
+            --user-pool-id "$pool_id" --output json |
+            jq -e '[.Providers[]? | select(.ProviderName == "Google")] | length == 1' >/dev/null
+          aws cognito-idp describe-user-pool-client --region ap-south-1 \
+            --user-pool-id "$pool_id" --client-id "$client_id" \
+            --query 'UserPoolClient.SupportedIdentityProviders' --output json |
+            jq -e 'index("Google") != null' >/dev/null
+          echo "Google IdP, app client and Cognito login domain verified from AWS."
       - name: Dispatch existing production release with refreshed auth settings
         if: steps.credentials.outputs.available == 'true'
         env:
