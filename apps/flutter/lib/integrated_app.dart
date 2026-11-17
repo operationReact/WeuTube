@@ -144,7 +144,12 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
     });
   }
   Future<void> signInWithGoogle() => perform(() async {
-    await api.loginWithGoogle();
+    try {
+      await api.loginWithGoogle();
+    } on ApiFailure catch (failure) {
+      message(failure.message);
+      rethrow;
+    }
     if(!mounted) return;
     await navigate(afterLogin);
     afterLogin = 'Home';
@@ -615,13 +620,15 @@ class _WeuTubeIntegratedAppState extends State<WeuTubeIntegratedApp> {
               ),
               const SizedBox(height: 20),
               const Row(children: [
-                Expanded(child: Divider(color: Color(0xFFD5DAE5))),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 13),
-                  child: Text('or sign in with email', style:
-                    TextStyle(color: slate, fontSize: 12,
-                      fontWeight: FontWeight.w600))),
-                Expanded(child: Divider(color: Color(0xFFD5DAE5))),
+                SizedBox(width: 23, child: Divider(color: Color(0xFFD5DAE5))),
+                Expanded(child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('or sign in with email',
+                    maxLines: 2, softWrap: true,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: slate, fontSize: 12,
+                      fontWeight: FontWeight.w600)))),
+                SizedBox(width: 23, child: Divider(color: Color(0xFFD5DAE5))),
               ]),
               const SizedBox(height: 21),
               fields,
