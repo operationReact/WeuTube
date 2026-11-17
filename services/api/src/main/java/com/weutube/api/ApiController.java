@@ -1,5 +1,6 @@
 package com.weutube.api;
 import java.time.Instant;
+import org.springframework.beans.factory.annotation.Value;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -7,8 +8,9 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api")
 public class ApiController {
+ @Value("${weutube.release-sha:unversioned}") private String releaseSha;
  @GetMapping("/public/status")
- public Map<String,Object> status() { return Map.of("service","weutube-api","mode","integration-pending","time",Instant.now().toString()); }
+ public Map<String,Object> status() { return Map.of("service","weutube-api","mode","integration-pending","revision",releaseSha,"time",Instant.now().toString()); }
  @GetMapping("/me")
  public Map<String,Object> me(Authentication authentication) { return Map.of("subject",authentication.getName()); }
  @PostMapping("/videos")

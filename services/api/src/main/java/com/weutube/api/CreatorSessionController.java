@@ -33,8 +33,10 @@ public class CreatorSessionController {
     SELECT EXISTS(
       SELECT 1 FROM creator_channel_grants g
       JOIN creators c ON c.id=g.creator_id
+      JOIN youtube_channels y
+        ON y.youtube_channel_id=g.youtube_channel_id
       JOIN youtube_oauth_credentials auth
-        ON auth.youtube_channel_id=g.youtube_channel_id
+        ON auth.youtube_channel_id=y.youtube_channel_id
       WHERE c.cognito_sub=?
     )
     """,Boolean.class,jwt.getSubject());
