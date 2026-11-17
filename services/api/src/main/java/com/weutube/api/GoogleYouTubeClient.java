@@ -2,6 +2,10 @@ package com.weutube.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Set;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.http.MediaType;
@@ -84,6 +88,33 @@ public class GoogleYouTubeClient {
   if (response==null || response.path("access_token").asText("").isBlank())
    throw new ProviderException("Google did not return a refreshed access token");
   return response.path("access_token").asText();
+ }
+
+ /** Server-only Data API metadata reads using the stored channel grant.
+  * Restrict resources so caller-controlled parameters cannot become an SSRF.
+  * Tokens are used only as request headers, never returned to Flutter.
+  */
+ public JsonNode readVideoCatalog(String resource,Map<String,String> query,String accessToken) {
+  if (!Set.of("channels","playlistItems","videos").contains(resource))
+   throw new IllegalArgumentException("Unsupported YouTube catalog endpoint");
+  if (accessToken==null || accessToken.isBlank())
+   throw new IllegalArgumentException("Missing authorized YouTube access");
+  var params=new java.util.ArrayList<String>();
+  query.forEach((key,value) -> {
+   if (key==null || !Set.of("part","id","playlistId","pageToken","maxResults","fields")
+       .contains(key) || value==null || value.length()>2000)
+    throw new IllegalArgumentException("Invalid YouTube catalog query");
+   params.add(URLEncoder.encode(key,StandardCharsets.UTF_8)
+     +"="+URLEncoder.encode(value,StandardCharsets.UTF_8));
+  });
+  String url="https://www.googleapis.com/youtube/v3/"+resource
+    +"?"+String.join("&",params);
+  try {
+   return http.get().uri(url).headers(h->h.setBearerAuth(accessToken))
+     .retrieve().body(JsonNode.class);
+  } catch (RestClientException ex) {
+   throw new ProviderException("YouTube catalog metadata read failed",ex);
+  }
  }
 
  public Channel channelFor(String accessToken) {
