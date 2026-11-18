@@ -18,8 +18,13 @@ jobs:
       - name: Check deployed guest feed and comments authorization
         run: |
           set -euo pipefail
-          curl -fsS --max-time 15 'https://api.weutube.com/api/public/social/feed?limit=25' \
-            | jq -e '.demoCount >= 12 and (.items | any(.creator == "Aanya Rao"))'
+          feed="$(curl -fsS --max-time 15 'https://api.weutube.com/api/public/social/feed?limit=25&includeDemo=false')"
+          jq -e '.demoCount == 0 and (.items | type == "array") and (.items | all(.demo == false)) and (.channelSyncStatus | type == "string") and (.connectedChannels | type == "number")' <<< "$feed"
+          jq -c '{channelSyncStatus,connectedChannels,importedVideos,realCount}' <<< "$feed"
+          if jq -e '.connectedChannels == 0' <<< "$feed" >/dev/null; then
+            echo "::warning::Public API is reachable but no authorized YouTube channel has been connected."
+          fi
+          curl -fsS --max-time 15 'https://api.weutube.com/api/public/social/feed?limit=25&includeDemo=true' | jq -e '.demoCount == 0'
           url='https://api.weutube.com/api/social/videos/00000000-0000-0000-0000-000000000000/comments'
           status="$(curl -sS --max-time 15 -o /tmp/guest-comments.json -w '%{http_code}' "$url")"
           echo "Guest comments HTTP status: $status"

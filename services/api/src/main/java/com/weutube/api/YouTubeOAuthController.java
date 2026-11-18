@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,7 +72,7 @@ public class YouTubeOAuthController {
   String state=Base64.getUrlEncoder().withoutPadding().encodeToString(random);
   Instant expires=Instant.now().plus(Duration.ofMinutes(10));
   jdbc.update("INSERT INTO youtube_oauth_attempts(id,state,admin_sub,expires_at) VALUES (?,?,?,?)",
-   UUID.randomUUID(),state,jwt.getSubject(),expires);
+   UUID.randomUUID(),state,jwt.getSubject(),expires.atOffset(ZoneOffset.UTC));
   String url="https://accounts.google.com/o/oauth2/v2/auth?client_id="+enc(clientId)
     +"&redirect_uri="+enc(redirectUri)
     +"&response_type=code&scope="+enc("https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl")
