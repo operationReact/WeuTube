@@ -49,6 +49,6 @@ class YouTubeOAuthControllerTest {
   assertTrue(response.url().contains("access_type=offline"));
   assertTrue(response.url().contains("prompt=consent"));
   verify(jdbc).update(contains("INSERT INTO youtube_oauth_attempts"),any(),anyString(),
-   eq("admin-123"),any());
+   eq("admin-123"),eq(response.expiresAt().atOffset(java.time.ZoneOffset.UTC)));
  }
 }
