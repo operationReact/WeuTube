@@ -1,7 +1,7 @@
 name: WeuTube - AWS production cost control
 
-# The initial installation commit performs ONE guarded stop. Subsequent
-# operations must be explicitly selected from the Actions "Run workflow" menu.
+# Manual-only after the initial successful shutdown: no automatic
+# startup or shutdown on repository pushes.
 on:
   workflow_dispatch:
     inputs:
@@ -14,10 +14,6 @@ on:
           - status
           - stop
           - start
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/weutube-cost-control.yml'
 
 permissions:
   contents: read
@@ -30,18 +26,12 @@ concurrency:
 
 jobs:
   cost-control:
-    # A workflow-file edit must not automatically stop a running application.
-    # The one-shot trigger only matches the exact, first installation commit.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' &&
-       github.event.head_commit.message == 'chore: add reversible WeuTube cost control [initial-stop]')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       AWS_REGION: ap-south-1
       AWS_DEFAULT_REGION: ap-south-1
-      OPERATION: ${{ github.event_name == 'push' && 'stop' || inputs.operation }}
+      OPERATION: ${{ inputs.operation }}
       EXPECTED_ACCOUNT: '098859530205'
       STATE_BUCKET: weutube-prod-tfstate-098859530205
     steps:
