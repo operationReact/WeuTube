@@ -68,7 +68,7 @@ jobs:
           test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT"
           case "$OPERATION" in stop|start|status) ;; *) echo "Unsupported operation"; exit 2 ;; esac
 
-          terraform init -input=false -lockfile=readonly \
+          terraform init -input=false \
             -backend-config="bucket=$STATE_BUCKET" \
             -backend-config="key=weutube/prod/terraform.tfstate" \
             -backend-config="region=ap-south-1" \
