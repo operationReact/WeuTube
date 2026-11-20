@@ -1,0 +1,237 @@
+name: WeuTube - AWS production cost control
+
+# The initial installation commit performs ONE guarded stop. Subsequent
+# operations must be explicitly selected from the Actions "Run workflow" menu.
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Choose what to do with the WeuTube production server"
+        type: choice
+        required: true
+        default: status
+        options:
+          - status
+          - stop
+          - start
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/weutube-cost-control.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+# Never shut down the server during a web/API deployment.
+concurrency:
+  group: weutube-api-production
+  cancel-in-progress: false
+
+jobs:
+  cost-control:
+    # A workflow-file edit must not automatically stop a running application.
+    # The one-shot trigger only matches the exact, first installation commit.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       github.event.head_commit.message == 'chore: add reversible WeuTube cost control [initial-stop]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ap-south-1
+      AWS_DEFAULT_REGION: ap-south-1
+      OPERATION: ${{ github.event_name == 'push' && 'stop' || inputs.operation }}
+      EXPECTED_ACCOUNT: '098859530205'
+      STATE_BUCKET: weutube-prod-tfstate-098859530205
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume existing WeuTube production Terraform role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+          role-session-name: weutube-cost-control
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.0'
+          terraform_wrapper: false
+
+      - name: Verify target AWS account and exact Terraform-managed EC2
+        id: discover
+        shell: bash
+        working-directory: infra/terraform
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT"
+          case "$OPERATION" in stop|start|status) ;; *) echo "Unsupported operation"; exit 2 ;; esac
+
+          terraform init -input=false -lockfile=readonly \
+            -backend-config="bucket=$STATE_BUCKET" \
+            -backend-config="key=weutube/prod/terraform.tfstate" \
+            -backend-config="region=ap-south-1" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+          INSTANCE_ID="$(terraform output -raw api_instance_id)"
+          ARTIFACT_BUCKET="$(terraform output -raw api_artifacts_bucket)"
+          DEPLOY_ROLE="$(terraform output -raw github_api_deploy_role_arn)"
+          [[ "$INSTANCE_ID" =~ ^i-[a-f0-9]{8,17}$ ]]
+          [[ "$ARTIFACT_BUCKET" == weutube-prod-api-artifacts-* ]]
+          [[ "$DEPLOY_ROLE" =~ ^arn:aws:iam::098859530205:role/weutube-prod- ]]
+          printf 'INSTANCE_ID=%s\nARTIFACT_BUCKET=%s\nDEPLOY_ROLE=%s\n' \
+            "$INSTANCE_ID" "$ARTIFACT_BUCKET" "$DEPLOY_ROLE" >> "$GITHUB_ENV"
+
+          aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --output json > /tmp/weutube-instance.json
+          jq -e --arg id "$INSTANCE_ID" '
+            [.Reservations[].Instances[]
+             | select(.InstanceId == $id)
+             | select((.Tags // [] | any(.Key == "Project" and .Value == "weutube")))
+             | select((.Tags // [] | any(.Key == "Environment" and .Value == "prod")))
+            ] | length == 1
+          ' /tmp/weutube-instance.json >/dev/null
+
+          # Never silently overlook an extra tagged WeuTube EC2 instance.
+          aws ec2 describe-instances \
+            --filters Name=tag:Project,Values=weutube Name=tag:Environment,Values=prod \
+            --output json > /tmp/weutube-project-instances.json
+          jq -e --arg id "$INSTANCE_ID" '
+            [.Reservations[].Instances[]
+             | select(.State.Name != "terminated") | .InstanceId] == [$id]
+          ' /tmp/weutube-project-instances.json >/dev/null || {
+            echo "::error::Additional or unexpected WeuTube EC2 instances exist; no changes made."
+            exit 1
+          }
+
+          STATE="$(jq -r '.Reservations[].Instances[0].State.Name' /tmp/weutube-instance.json)"
+          printf 'state=%s\n' "$STATE" >> "$GITHUB_OUTPUT"
+          echo "Target: $INSTANCE_ID in $EXPECTED_ACCOUNT/$AWS_REGION; current state: $STATE"
+
+      - name: Back up PostgreSQL off-instance before stopping
+        if: env.OPERATION == 'stop' && steps.discover.outputs.state == 'running'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Creating a fresh, encrypted S3 backup before shutdown."
+          # Existing narrow role can invoke the deployed backup script through SSM.
+          # The database and all Docker containers reside on this one EC2 machine.
+      - name: Assume restricted deployment role for PostgreSQL backup
+        if: env.OPERATION == 'stop' && steps.discover.outputs.state == 'running'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE }}
+          aws-region: ap-south-1
+          role-session-name: weutube-pre-stop-backup
+          unset-current-credentials: true
+
+      - name: Require successful private S3 PostgreSQL backup
+        if: env.OPERATION == 'stop' && steps.discover.outputs.state == 'running'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT"
+          command="bash /opt/weutube/backup-db.sh '$ARTIFACT_BUCKET'"
+          params="$(jq -nc --arg cmd "$command" '{commands:[$cmd],executionTimeout:["900"]}')"
+          command_id="$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$params" \
+            --comment 'WeuTube required pre-stop PostgreSQL backup' \
+            --query Command.CommandId --output text)"
+          echo "Backup SSM command: $command_id"
+          finished=false
+          for attempt in $(seq 1 90); do
+            state="$(aws ssm get-command-invocation --command-id "$command_id" \
+              --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)"
+            case "$state" in
+              Success) finished=true; break ;;
+              Failed|TimedOut|Cancelled|Cancelling)
+                echo "::error::Backup failed ($state). Refusing to stop EC2."
+                exit 1 ;;
+              *) sleep 10 ;;
+            esac
+          done
+          test "$finished" = true || { echo "::error::Backup timed out. EC2 was not stopped."; exit 1; }
+          echo "Fresh private PostgreSQL backup completed."
+
+      - name: Re-assume infrastructure role for EC2 state changes
+        if: env.OPERATION == 'stop' && steps.discover.outputs.state == 'running'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.WEUTUBE_TERRAFORM_ROLE_TO_ASSUME }}
+          aws-region: ap-south-1
+          role-session-name: weutube-stop-instance
+          unset-current-credentials: true
+
+      - name: Stop WeuTube production EC2 (reversible)
+        if: env.OPERATION == 'stop'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT"
+          current="$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].State.Name' --output text)"
+          case "$current" in
+            stopped) echo "Already stopped; no action needed." ;;
+            stopping) aws ec2 wait instance-stopped --instance-ids "$INSTANCE_ID" ;;
+            running)
+              # This step is reachable only after the mandatory backup succeeded.
+              aws ec2 stop-instances --instance-ids "$INSTANCE_ID" --no-force >/dev/null
+              aws ec2 wait instance-stopped --instance-ids "$INSTANCE_ID" ;;
+            *) echo "::error::Refusing stop in unexpected state: $current"; exit 1 ;;
+          esac
+          echo "WeuTube EC2 is STOPPED."
+          echo "## WeuTube stopped" >> "$GITHUB_STEP_SUMMARY"
+          echo "EC2 $INSTANCE_ID is stopped. API, website, PostgreSQL and its jobs are offline." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start WeuTube production EC2 (reversible)
+        if: env.OPERATION == 'start'
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].State.Name' --output text)"
+          case "$current" in
+            stopped) aws ec2 start-instances --instance-ids "$INSTANCE_ID" >/dev/null ;;
+            pending|running) echo "Instance is already starting or running." ;;
+            *) echo "::error::Refusing start in state: $current"; exit 1 ;;
+          esac
+          aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
+          aws ec2 wait instance-status-ok --instance-ids "$INSTANCE_ID"
+          echo "WeuTube EC2 is RUNNING. Checking API and website..."
+          healthy=false
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 8 https://api.weutube.com/actuator/health >/dev/null \
+              && curl -fsS --max-time 8 https://weutube.com/ >/dev/null; then
+              healthy=true
+              break
+            fi
+            sleep 10
+          done
+          test "$healthy" = true || {
+            echo "::error::EC2 started but application HTTPS checks failed; check Docker services via SSM."
+            exit 1
+          }
+          echo "## WeuTube started" >> "$GITHUB_STEP_SUMMARY"
+          echo "EC2 $INSTANCE_ID and public website/API HTTPS health checks passed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report status and residual AWS charges
+        if: env.OPERATION == 'status' || env.OPERATION == 'stop' || env.OPERATION == 'start'
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].State.Name' --output text)"
+          {
+            echo "## WeuTube AWS cost-control status"
+            echo "- Account: $EXPECTED_ACCOUNT; region: $AWS_REGION"
+            echo "- Terraform-managed EC2: $INSTANCE_ID"
+            echo "- Instance state: **$state**"
+            echo "- Production URL: https://weutube.com/"
+            echo "- EC2 compute billed only while running (or in applicable transitional states)."
+            echo "- **Still retained and potentially billable when stopped:** EC2 gp3 root EBS (PostgreSQL data), Elastic IP/public IPv4, S3 artifact/web/backup/state storage, and domain/DNS."
+            echo "- Cognito, IAM, SSM and any CloudFront resources are preserved; their usage-based charges, where applicable, are not eliminated by EC2 stop."
+            echo "- No Terraform destroy, database deletion, bucket deletion, credential deletion or cross-project instance changes were performed."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
